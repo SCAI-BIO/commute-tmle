@@ -1,0 +1,4 @@
+endpoint: composite
+wave: first_wave
+control_group_design: tested_vs_untested
+subset: null
