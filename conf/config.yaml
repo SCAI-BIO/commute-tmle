@@ -2,5 +2,7 @@ mock_data:
   n: 1000
 
 seed: 1234
-input_csv: ./data/a_inputs/mock_input.csv
 min_age_at_index: 70
+input_csv: ./data/a_inputs/mock_input.csv
+dates_set_path: ./data/b_dates_set
+covariates_merged_path: ./data/c_covariates_merged

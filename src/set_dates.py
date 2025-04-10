@@ -1,41 +1,50 @@
 import pandas as pd
-from dateutil.relativedelta import relativedelta
 import hydra
 import numpy as np
 from omegaconf import DictConfig
 from typing import Optional
 
+# filter functions for infection waves
 waves_fns = {
-    None: lambda x: x,
-    "first_wave": lambda x: x <= "2020-08-31",
+    None: lambda x: x >= "2020-01-01",
+    "first_wave": lambda x: (x >= "2020-01-01") & (x <= "2020-08-31"),
     "second_wave": lambda x: (x >= "2020-09-01") & (x <= "2021-05-31"),
     "third_wave": lambda x: (x >= "2021-06-01") & (x <= "2021-11-31"),
     "omicron_wave": lambda x: (x >= "2021-12-01") & (x <= "2022-06-30"),
 }
 
+# filter functions for subset (hospitalized or tested)
 subset_fns = {
-    None: lambda x: x,
-    "hospital": lambda x: x["hospitalized_due_to_covid"],
-    "tested": lambda x: x["date_first_tested_positive"] == x["index_date"],
+    None: lambda x: x["index_date"].notna(),
+    "hospital": lambda x: (x["index_date"].notna()) & (x["hospitalized_due_to_covid"]),
+    "tested": lambda x: (x["index_date"].notna()) & (x["date_first_tested_positive"] == x["index_date"]),
 }
 
 
 def filter_invalid_dates(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Filter out rows where the index date is after the event date or the censoring date.
+    Filter out rows where the index date is after the event, death or censoring date.
+    Also force censoring_date to censoring_global if it would come later in time.
     """
     df = df[
         (df["index_date"] < df["censoring_global"])
         & (df["event_date"].isna() | (df["index_date"] < df["event_date"]))
         & (df["death_date"].isna() | (df["index_date"] < df["death_date"]))
-        & (df["censoring_date"] <= df["censoring_global"])
     ].copy()
+    df.loc[df["censoring_global"] < df["censoring_date"], "censoring_date"] = df[
+        "censoring_global"
+    ]
     return df
 
 
 def sample_control_index_dates(
     covid_df: pd.DataFrame, control_pool_df: pd.DataFrame, sample_age: bool
 ):
+    """
+    Sample index dates for the control group based on the COVID group.
+    If sample_age is True, sample the age at index date from the COVID group and
+    set the index at the date at which a control patient was as old.
+    """
     sample_indices = np.random.randint(0, len(covid_df), size=len(control_pool_df))
     if sample_age:
         age_samples = covid_df.age_at_index.values[sample_indices]
@@ -50,6 +59,9 @@ def sample_control_index_dates(
 def sample_control_censoring_dates(
     covid_df: pd.DataFrame, control_pool_df: pd.DataFrame
 ):
+    """
+    Sample follow-up times from COVID group to set censoring dates accordingly for the control group.
+    """
     sample_indices = np.random.randint(0, len(covid_df), size=len(control_pool_df))
     fu_samples = covid_df.event_time.values[sample_indices]
     censoring_samples = control_pool_df["index_date"] + pd.to_timedelta(
@@ -59,8 +71,15 @@ def sample_control_censoring_dates(
 
 
 def get_event_indicator_and_time(df):
+    """
+    Get event indicator and time to event for the given DataFrame.
+    The event indicator is 0 for censoring, 1 for event and 2 for death.
+    The event time is the time from index date to the earliest of the three dates.
+    """
+    # get the earliest date of censoring, event and death
     earliest_date = df[["censoring_date", "event_date", "death_date"]].min(axis=1)
     event_time = (earliest_date - df["index_date"]).dt.days
+    # get the event indicator
     event_indicator = (
         df[["censoring_date", "event_date", "death_date"]]
         .idxmin(axis=1)
@@ -78,8 +97,31 @@ def prepandemic_control_fu(
     wave: Optional[str],
     subset: Optional[str],
 ) -> pd.DataFrame:
+    """
+    Control group design where the control group is sampled from the prepandemic
+    population, with index dates set at the dates at which controls were as old as sampled
+    COVID patients at the time of their first documented infection.
+    The follow-up time is set with samples from the COVID group.
+
+    Parameters
+    ----------
+    covid_df : pd.DataFrame
+        DataFrame containing the COVID group data.
+    control_pool_df : pd.DataFrame
+        DataFrame containing the control pool data.
+    wave : Optional[str]
+        The wave of infection to filter the COVID group.
+    subset : Optional[str]
+        The subset of the population to filter the COVID group (hospitalized or tested).
+    Returns
+    -------
+    -------
+    pd.DataFrame
+        DataFrame containing the combined data of the COVID group and control group.
+    """
+    # filter COVID patients based on the subset and wave
     covid_df = covid_df[
-        subset_fns[subset](covid_df) & (waves_fns[wave](covid_df["index_date"]))
+        (subset_fns[subset](covid_df)) & ((waves_fns[wave](covid_df["index_date"])))
     ]
     covid_df.loc[:, ["event_indicator", "event_time"]] = get_event_indicator_and_time(
         covid_df
@@ -113,12 +155,35 @@ def equal_control_fu(
     wave: Optional[str],
     subset: Optional[str],
 ) -> pd.DataFrame:
+    """
+    Control group design where the control group is sampled from the same time period as the
+    COVID group, with index dates directly sampled from the COVID group.
+    The follow-up time is set with samples from the COVID group.
+
+    Parameters
+    ----------
+    covid_df : pd.DataFrame
+        DataFrame containing the COVID group data.
+    control_pool_df : pd.DataFrame
+        DataFrame containing the control pool data.
+    wave : Optional[str]
+        The wave of infection to filter the COVID group.
+    subset : Optional[str]
+        The subset of the population to filter the COVID group (hospitalized or tested).
+    Returns
+    -------
+    -------
+    pd.DataFrame
+        DataFrame containing the combined data of the COVID group and control group.
+    """
+    # filter COVID patients based on the subset and wave
     covid_df = covid_df[
         subset_fns[subset](covid_df) & (waves_fns[wave](covid_df["index_date"]))
     ]
     covid_df.loc[:, ["event_indicator", "event_time"]] = get_event_indicator_and_time(
         covid_df
     )
+    # control index dates are directly sampled from the COVID group
     control_pool_df["index_date"] = sample_control_index_dates(
         covid_df, control_pool_df, sample_age=False
     )
@@ -138,24 +203,46 @@ def equal_control_fu(
     return df
 
 
-def tested_vs_untested(
+def tested_positive_vs_negative(
     covid_df: pd.DataFrame,
     control_pool_df: pd.DataFrame,
     wave: Optional[str],
 ) -> pd.DataFrame:
+    """
+    Control group design where the control group are patients that got first tested in the same
+    time period as the COVID group, with index dates directly sampled from the COVID group.
+    The follow-up time is set with samples from the COVID group.
+    Parameters
+    ----------
+    covid_df : pd.DataFrame
+        DataFrame containing the COVID group data.
+    control_pool_df : pd.DataFrame
+        DataFrame containing the control pool data.
+    wave : Optional[str]
+        The wave of infection to filter the COVID group.
+    Returns
+    -------
+    -------
+    pd.DataFrame
+        DataFrame containing the combined data of the COVID group and control group.
+    """
+    # only use COVID patients that were tested positive
     covid_df = covid_df[
         subset_fns["tested"](covid_df) & (waves_fns[wave](covid_df["index_date"]))
     ]
     covid_df.loc[:, ["event_indicator", "event_time"]] = get_event_indicator_and_time(
         covid_df
     )
+    # only use control patients that were tested (negative) in the same time period as the COVID group
     control_pool_df = control_pool_df[
         (~control_pool_df["date_first_tested"].isna())
         & (waves_fns[wave](control_pool_df["date_first_tested"]))
     ].copy()
+    # control index dates are directly sampled from the COVID group
     control_pool_df["index_date"] = sample_control_index_dates(
         covid_df, control_pool_df, sample_age=False
     )
+    # censoring dates will be set after follow-up corresponding to that of a sampled COVID patient
     control_pool_df["censoring_date"] = sample_control_censoring_dates(
         covid_df, control_pool_df
     )
@@ -241,8 +328,8 @@ def main(cfg: DictConfig):
             wave=cfg.experiment.wave,
             subset=cfg.experiment.subset,
         )
-    elif cfg.experiment.control_group_design == "tested_vs_untested":
-        output = tested_vs_untested(
+    elif cfg.experiment.control_group_design == "tested_positive_vs_negative":
+        output = tested_positive_vs_negative(
             covid_df=covid_df,
             control_pool_df=control_pool_df,
             wave=cfg.experiment.wave,
@@ -266,7 +353,7 @@ def main(cfg: DictConfig):
     ]
 
     # save output
-    save_path = f"./data/b_dates_set/{cfg.experiment.endpoint}_"
+    save_path = f"{cfg.dates_set_path}/{cfg.experiment.endpoint}_"
     if cfg.experiment.wave is not None:
         save_path += f"{cfg.experiment.wave}_"
     save_path += f"{cfg.experiment.control_group_design}"

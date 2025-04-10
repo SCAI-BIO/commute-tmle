@@ -5,7 +5,7 @@ import pandas as pd
 
 
 def generate_random_date(start: str, end: str, n: int, missing_prob: float = 0.0):
-    """Generate a random date between start and end."""
+    """Generate n random dates between start and end, missing with a given probability."""
     dates = pd.to_datetime(
         pd.Series(pd.Series(pd.date_range(start, end)).sample(n=n, replace=True).values)
     )
@@ -19,6 +19,7 @@ def main(cfg: DictConfig):
 
     np.random.seed(cfg.seed)
 
+    # Create a data frame with the following columns:
     n = cfg.mock_data.n
     df = pd.DataFrame(
         columns=[
@@ -38,6 +39,7 @@ def main(cfg: DictConfig):
     # patient ID is just a number from 1 to n
     df["patient_id"] = range(1, n + 1)
 
+    # all mock patients should be at least 70 years old in 2020
     df["birth_date"] = generate_random_date(
         start="1930-01-01", end="1949-12-31", n=n, missing_prob=0.0
     )
@@ -62,6 +64,7 @@ def main(cfg: DictConfig):
     df["date_first_tested"] = generate_random_date(
         "2020-01-01", "2022-12-31", n=n, missing_prob=0.5
     )
+    # if first date_first_tested is before date_first_tested_positive, set date_first_tested to date_first_tested_positive
     df.loc[
         df["date_first_tested_positive"] < df["date_first_tested"], "date_first_tested"
     ] = df["date_first_tested_positive"]
