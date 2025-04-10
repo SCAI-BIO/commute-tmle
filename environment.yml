@@ -63,9 +63,10 @@ dependencies:
   - numpy=2.2.4=py313h17eae1a_0
   - omegaconf=2.3.0=pyhd8ed1ab_0
   - openjpeg=2.5.3=h5fbd93e_0
-  - openssl=3.4.1=h7b32b05_0
+  - openssl=3.5.0=h7b32b05_0
   - packaging=24.2=pyhd8ed1ab_2
   - pandas=2.2.3=py313ha87cce1_1
+  - patsy=1.0.1=pyhd8ed1ab_1
   - pillow=11.1.0=py313h8db990d_0
   - pip=25.0.1=pyh145f28c_0
   - pthread-stubs=0.4=hb9d3cd8_1002
@@ -80,8 +81,11 @@ dependencies:
   - readline=8.2=h8c095d6_2
   - scikit-learn=1.6.1=py313h8ef605b_0
   - scipy=1.15.2=py313h86fcf2b_0
+  - seaborn=0.13.2=hd8ed1ab_3
+  - seaborn-base=0.13.2=pyhd8ed1ab_3
   - setuptools=78.1.0=pyhff2d567_0
   - six=1.17.0=pyhd8ed1ab_0
+  - statsmodels=0.14.4=py313ha014f3b_0
   - threadpoolctl=3.6.0=pyhecae5ae_0
   - tk=8.6.13=noxft_h4845f30_101
   - tqdm=4.67.1=pyhd8ed1ab_1
@@ -95,6 +99,7 @@ dependencies:
   - zstd=1.5.7=hb8e6e7a_2
   - pip:
       - black==25.1.0
+      - click==8.1.8
       - mypy-extensions==1.0.0
       - pathspec==0.12.1
       - platformdirs==4.3.7

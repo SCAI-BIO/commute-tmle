@@ -1,8 +1,11 @@
 import pandas as pd
 import hydra
+import matplotlib.pyplot as plt
 import numpy as np
 from omegaconf import DictConfig
 from typing import Optional
+
+from plotting import make_histogram
 
 # filter functions for infection waves
 waves_fns = {
@@ -17,7 +20,14 @@ waves_fns = {
 subset_fns = {
     None: lambda x: x["index_date"].notna(),
     "hospital": lambda x: (x["index_date"].notna()) & (x["hospitalized_due_to_covid"]),
-    "tested": lambda x: (x["index_date"].notna()) & (x["date_first_tested_positive"] == x["index_date"]),
+    "tested": lambda x: (x["index_date"].notna())
+    & (x["date_first_tested_positive"] == x["index_date"]),
+}
+
+endpoint_fns = {
+    0: lambda x: "censored",
+    1: lambda x: x,
+    2: lambda x: "death",
 }
 
 
@@ -362,6 +372,35 @@ def main(cfg: DictConfig):
     save_path += ".csv"
 
     output.to_csv(save_path, index=False, float_format="%.2f")
+
+    # store the event counts per exposure group
+    event_counts = (
+        output.groupby("exposed")["event_indicator"]
+        .value_counts()
+        .unstack(fill_value=0)
+    )
+    with open(f"{cfg.output_path}/event_counts.txt", "w") as f:
+        print(event_counts, file=f)
+    # save plots
+    # plot histogragram of index dates and age at index
+    for feature_name in ["index_date", "age_at_index"]:
+        make_histogram(
+            output,
+            feature_name=feature_name,
+            endpoint_name="all",
+        )
+        plt.savefig(f"{cfg.output_path}/histogram_{feature_name}.png")
+        plt.close()
+    # plot histogram of event time for each endpoint (0, 1, 2)
+    for endpoint in [0, 1, 2]:
+        endpoint_name = endpoint_fns[endpoint](cfg.experiment.endpoint)
+        make_histogram(
+            output[output["event_indicator"] == endpoint],
+            feature_name="event_time",
+            endpoint_name=endpoint_name,
+        )
+        plt.savefig(f"{cfg.output_path}/histogram_event_time_{endpoint_name}.png")
+        plt.close()
 
 
 if __name__ == "__main__":
