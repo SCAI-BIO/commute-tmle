@@ -1,7 +1,13 @@
 import hydra
+from hydra.core.config_store import ConfigStore
 import numpy as np
-from omegaconf import DictConfig
 import pandas as pd
+
+from conf.config import RunConfig
+
+# Set up the config store
+cs = ConfigStore.instance()
+cs.store(name="pipeline_config", node=RunConfig)
 
 
 def generate_random_date(start: str, end: str, n: int, missing_prob: float = 0.0):
@@ -15,9 +21,9 @@ def generate_random_date(start: str, end: str, n: int, missing_prob: float = 0.0
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
-def main(cfg: DictConfig):
+def main(cfg: RunConfig):
 
-    np.random.seed(cfg.seed)
+    np.random.seed(cfg.general.seed)
 
     # Create a data frame with the following columns:
     n = cfg.mock_data.n
@@ -73,24 +79,24 @@ def main(cfg: DictConfig):
     )
 
     # event dates are independent random dates between 2017-01-01 and 2023-12-31
-    # and should each be missing with a probability of 95%
+    # and should each be missing with a probability of 80%-90%
     df["date_first_ad_diagnosis"] = generate_random_date(
-        "2017-01-01", "2023-12-31", n=n, missing_prob=0.95
+        "2017-01-01", "2023-12-31", n=n, missing_prob=0.9
     )
     df["date_first_pd_diagnosis"] = generate_random_date(
-        "2017-01-01", "2023-12-31", n=n, missing_prob=0.95
+        "2017-01-01", "2023-12-31", n=n, missing_prob=0.9
     )
     df["date_first_unspecified_dementia_diagnosis"] = generate_random_date(
-        "2017-01-01", "2023-12-31", n=n, missing_prob=0.95
+        "2017-01-01", "2023-12-31", n=n, missing_prob=0.9
     )
     df["death_date"] = generate_random_date(
-        "2017-01-01", "2023-12-31", n=n, missing_prob=0.95
+        "2017-01-01", "2023-12-31", n=n, missing_prob=0.8
     )
 
     # censoring_global is the 31 December 2022 for all patients
     df["censoring_global"] = pd.to_datetime("2022-12-31")
 
-    df.to_csv(cfg.input_csv, index=False)
+    df.to_csv(cfg.general.input_csv, index=False)
 
 
 if __name__ == "__main__":

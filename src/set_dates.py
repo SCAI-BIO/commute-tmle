@@ -1,11 +1,18 @@
 import pandas as pd
 import hydra
+from hydra.core.config_store import ConfigStore
 import matplotlib.pyplot as plt
 import numpy as np
-from omegaconf import DictConfig
 from typing import Optional
 
-from plotting import make_histogram
+from .utils.plotting import make_histogram
+from .utils.utils import parse_path_for_experiment
+from conf.config import RunConfig
+
+# Set up the config store
+cs = ConfigStore.instance()
+cs.store(name="pipeline_config", node=RunConfig)
+
 
 # filter functions for infection waves
 waves_fns = {
@@ -269,12 +276,12 @@ def tested_positive_vs_negative(
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
-def main(cfg: DictConfig):
+def main(cfg: RunConfig):
 
-    np.random.seed(cfg.seed)
+    np.random.seed(cfg.general.seed)
 
     df = pd.read_csv(
-        cfg.input_csv,
+        cfg.general.input_csv,
         parse_dates=[
             "birth_date",
             "date_first_tested_positive",
@@ -314,7 +321,8 @@ def main(cfg: DictConfig):
 
     # split to COVID group and control pool
     covid_df = df.loc[
-        (~df["index_date"].isna()) & (df["age_at_index"] >= cfg.min_age_at_index)
+        (~df["index_date"].isna())
+        & (df["age_at_index"] >= cfg.general.min_age_at_index)
     ].copy()
     covid_df["exposed"] = True
     covid_df["censoring_date"] = covid_df["censoring_global"]
@@ -363,14 +371,7 @@ def main(cfg: DictConfig):
     ]
 
     # save output
-    save_path = f"{cfg.dates_set_path}/{cfg.experiment.endpoint}_"
-    if cfg.experiment.wave is not None:
-        save_path += f"{cfg.experiment.wave}_"
-    save_path += f"{cfg.experiment.control_group_design}"
-    if cfg.experiment.subset is not None:
-        save_path += f"_{cfg.experiment.subset}"
-    save_path += ".csv"
-
+    save_path = parse_path_for_experiment(cfg.general.dates_set_path, cfg.experiment)
     output.to_csv(save_path, index=False, float_format="%.2f")
 
     # store the event counts per exposure group
@@ -379,7 +380,7 @@ def main(cfg: DictConfig):
         .value_counts()
         .unstack(fill_value=0)
     )
-    with open(f"{cfg.output_path}/event_counts.txt", "w") as f:
+    with open(f"{cfg.general.output_path}/event_counts.txt", "w") as f:
         print(event_counts, file=f)
     # save plots
     # plot histogragram of index dates and age at index
@@ -389,7 +390,7 @@ def main(cfg: DictConfig):
             feature_name=feature_name,
             endpoint_name="all",
         )
-        plt.savefig(f"{cfg.output_path}/histogram_{feature_name}.png")
+        plt.savefig(f"{cfg.general.output_path}/histogram_{feature_name}.png")
         plt.close()
     # plot histogram of event time for each endpoint (0, 1, 2)
     for endpoint in [0, 1, 2]:
@@ -399,7 +400,9 @@ def main(cfg: DictConfig):
             feature_name="event_time",
             endpoint_name=endpoint_name,
         )
-        plt.savefig(f"{cfg.output_path}/histogram_event_time_{endpoint_name}.png")
+        plt.savefig(
+            f"{cfg.general.output_path}/histogram_event_time_{endpoint_name}.png"
+        )
         plt.close()
 
 

@@ -1,9 +1,31 @@
-seed: 1234
-min_age_at_index: 70
-input_csv: ./data/a_inputs/mock_input.csv
-dates_set_path: ./data/b_dates_set
-covariates_merged_path: ./data/c_covariates_merged
-output_path: ${hydra:sweep.dir}/${hydra:sweep.subdir}
+general:
+  seed: 1234
+  min_age_at_index: 70.0
+  input_csv: ./data/a_inputs/mock_input.csv
+  dates_set_path: ./data/b_dates_set
+  covariates_merged_path: ./data/c_covariates_merged
+  output_path: ${hydra:sweep.dir}/${hydra:sweep.subdir}
+
+fit:
+  exclude_columns:
+    - patient_id
+    - index_date
+  n_jobs: 8
+  n_trials: 100
+  n_folds_outer: 5
+  n_folds_inner: 3
+  eval_metric: c_index_1
+  max_updates: 5000
+  target_times:
+    - 100
+    - 200
+    - 300
+    - 400
+    - 500
+    - 600
+    - 700
+  undersample_exposure_groups: true
+  subset_condition: null
 
 mock_data:
   n: 1000
