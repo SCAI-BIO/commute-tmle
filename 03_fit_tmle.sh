@@ -2,6 +2,9 @@
 # this reads all experiments from ./conf/experiment and transforms it to a comma-separated list
 EXPERIMENTS=$(ls ./conf/experiment/*.yaml | xargs -n1 basename | sed 's/\.yaml$//' | tr '\n' ',' | sed 's/,$//')
 
+# target times
+TARGET_TIMES="[100,200,300,400,500,600,700]"
+
 # for stratification
 SUBSET_CONDITION=null # e.g., "age_at_index<80"
 
@@ -19,6 +22,7 @@ mamba activate commute-tmle
 python3 -m src.fit_tmle --multirun \
  +experiment=${EXPERIMENTS} \
  fit.n_jobs=${N_JOBS} \
+ fit.target_times=${TARGET_TIMES} \
  fit.subset_condition=${SUBSET_CONDITION} \
  hydra.launcher.cpus_per_task=${N_JOBS} \
  hydra.launcher.timeout_min=${TIMEOUT_MIN} \
