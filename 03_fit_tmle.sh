@@ -6,9 +6,10 @@ EXPERIMENTS=$(ls ./conf/experiment/*.yaml | xargs -n1 basename | sed 's/\.yaml$/
 SUBSET_CONDITION=null # e.g., "age_at_index<80"
 
 # hardware requirements
-N_JOBS=4
+N_JOBS=6
 MEM_GB=32
 TIMEOUT_MIN=1440
+# when running on HPC cluster, you may want to add variable for partition
 
 # activate mamba environment
 source ~/.bashrc

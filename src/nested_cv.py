@@ -5,6 +5,7 @@ import numpy as np
 import optuna
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
+import time
 import warnings
 
 from .utils.utils import ensure_monotonicity, get_metrics
@@ -112,8 +113,14 @@ def tune_and_predict(
         skf_outer.split(np.asarray(indices), y_all["event"])
     ):
         logger.info(f"Begin hyperparameter optimization for fold {i+1}/{n_folds_outer}")
+        # set up timeout to circumvent deadlock
+        # it may be better to switch to MySQL or PostgreSQL altogether, but this would make the code application more complicated
+        storage = optuna.storages.RDBStorage(
+            url=f"sqlite:///{out_path}/optuna_fold{i+1}.db",
+            engine_kwargs={"connect_args": {"timeout": 100}},
+        )
         study = optuna.create_study(
-            storage=f"sqlite:///{out_path}/optuna_fold{i+1}.db",
+            storage=storage,
             direction="minimize" if eval_metric.startswith("ibs") else "maximize",
             study_name=(f"SurvivalBoost fold {i+1}"),
             load_if_exists=True,
@@ -128,8 +135,12 @@ def tune_and_predict(
         # inner loop (trials can be optimized)
         def inner_loop(
             n_trials: int,
+            sleep_for: float = 0.0,
         ):
             """A wrapper for parallelized hyperparameter optimization in the inner loop."""
+            # sleep for a random time to avoid deadlock
+            if sleep_for > 0:
+                time.sleep(sleep_for)
             shared_study = optuna.load_study(
                 study_name=study.study_name,
                 storage=f"sqlite:///{out_path}/optuna_fold{i+1}.db",
@@ -169,8 +180,11 @@ def tune_and_predict(
             Parallel(n_jobs=n_workers)(
                 delayed(inner_loop)(
                     n_trials=n_trials // n_workers,
+                    sleep_for=sleep_for,
                 )
-                for _ in range(n_workers)
+                for sleep_for in np.random.choice(
+                    np.linspace(0, 5, n_workers), n_workers
+                )
             )
 
         # refit and evaluate on outer test set
