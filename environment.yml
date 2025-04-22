@@ -134,7 +134,7 @@ dependencies:
       - pycox==0.3.0
       - pycryptodomex==3.22.0
       - pyppmd==1.1.1
-      - pytmle==0.1.0
+      - pytmle==0.1.1
       - pyzstd==0.16.2
       - qdldl==0.1.7.post5
       - requests==2.32.3
