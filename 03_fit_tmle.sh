@@ -10,9 +10,9 @@ SUBSET_CONDITION=null # e.g., "age_at_index<80"
 
 # for optuna storage
 # this is the database connection string for PostgreSQL
-OPTUNA_STORAGE_PORT = 5433
-OPTUNA_STORAGE_HOST = "localhost" # change for execution on a cluster
-OPTUNA_STORAGE = "postgresql://commute@${OPTUNA_STORAGE_HOST}:${OPTUNA_STORAGE_HOST}/optuna"
+OPTUNA_STORAGE_PORT=5433
+OPTUNA_STORAGE_HOST="localhost" # change for execution on a cluster
+OPTUNA_STORAGE="postgresql://commute@${OPTUNA_STORAGE_HOST}:${OPTUNA_STORAGE_PORT}/optuna"
 
 
 # hardware requirements

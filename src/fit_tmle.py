@@ -67,6 +67,7 @@ def main(cfg: RunConfig):
             n_trials=cfg.fit.n_trials,
             n_jobs=cfg.fit.n_jobs,
             optuna_storage=cfg.fit.optuna_storage,
+            experiment_prefix=csv_path.split("/")[-1].split(".")[0],
         )
     )
     # Save eval_metrics_dict as JSON

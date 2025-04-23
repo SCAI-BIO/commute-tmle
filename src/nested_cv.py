@@ -88,6 +88,7 @@ def tune_and_predict(
     n_trials: int,
     n_jobs: int,
     optuna_storage: Optional[Union[str, optuna.storages.RDBStorage]] = None,
+    experiment_prefix: Optional[str] = None,
 ):
     logger.info(
         f"Running nested cross validation for SurvivalBoost with hyperparameter tuning based on {eval_metric}"
@@ -120,10 +121,14 @@ def tune_and_predict(
                 url=f"sqlite:///{out_path}/optuna_fold{i+1}.db",
                 engine_kwargs={"connect_args": {"timeout": 100}},
             )
+        if experiment_prefix is None:
+            study_name = f"SurvivalBoost_fold_{i+1}"  #
+        else:
+            study_name = f"{experiment_prefix}_fold_{i+1}"
         study = optuna.create_study(
             storage=optuna_storage,
             direction="minimize" if eval_metric.startswith("ibs") else "maximize",
-            study_name=(f"SurvivalBoost fold {i+1}"),
+            study_name=study_name,
             load_if_exists=True,
         )
 
