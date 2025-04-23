@@ -31,6 +31,7 @@ fit:
     - 700
   undersample_exposure_groups: true
   subset_condition: null
+  optuna_storage: null
 
 mock_data:
   n: 1000

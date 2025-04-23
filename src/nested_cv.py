@@ -5,7 +5,7 @@ import numpy as np
 import optuna
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
-import time
+from typing import Optional, Union
 import warnings
 
 from .utils.utils import ensure_monotonicity, get_metrics
@@ -87,6 +87,7 @@ def tune_and_predict(
     eval_metric: str,
     n_trials: int,
     n_jobs: int,
+    optuna_storage: Optional[Union[str, optuna.storages.RDBStorage]] = None,
 ):
     logger.info(
         f"Running nested cross validation for SurvivalBoost with hyperparameter tuning based on {eval_metric}"
@@ -113,14 +114,14 @@ def tune_and_predict(
         skf_outer.split(np.asarray(indices), y_all["event"])
     ):
         logger.info(f"Begin hyperparameter optimization for fold {i+1}/{n_folds_outer}")
-        # set up timeout to circumvent deadlock
-        # it may be better to switch to MySQL or PostgreSQL altogether, but this would make the code application more complicated
-        storage = optuna.storages.RDBStorage(
-            url=f"sqlite:///{out_path}/optuna_fold{i+1}.db",
-            engine_kwargs={"connect_args": {"timeout": 100}},
-        )
+        if optuna_storage is None:
+            # if no storage is provided, use SQLite
+            optuna_storage = optuna.storages.RDBStorage(
+                url=f"sqlite:///{out_path}/optuna_fold{i+1}.db",
+                engine_kwargs={"connect_args": {"timeout": 100}},
+            )
         study = optuna.create_study(
-            storage=storage,
+            storage=optuna_storage,
             direction="minimize" if eval_metric.startswith("ibs") else "maximize",
             study_name=(f"SurvivalBoost fold {i+1}"),
             load_if_exists=True,
@@ -135,15 +136,12 @@ def tune_and_predict(
         # inner loop (trials can be optimized)
         def inner_loop(
             n_trials: int,
-            sleep_for: float = 0.0,
+            optuna_storage: Union[str, optuna.storages.RDBStorage],
         ):
             """A wrapper for parallelized hyperparameter optimization in the inner loop."""
-            # sleep for a random time to avoid deadlock
-            if sleep_for > 0:
-                time.sleep(sleep_for)
             shared_study = optuna.load_study(
                 study_name=study.study_name,
-                storage=f"sqlite:///{out_path}/optuna_fold{i+1}.db",
+                storage=optuna_storage,
             )
             indices_inner = list(range(len(X_train_outer)))
 
@@ -173,6 +171,7 @@ def tune_and_predict(
         if n_jobs == 1:
             inner_loop(
                 n_trials=n_trials,
+                optuna_storage=optuna_storage,
             )
         else:
             n_workers = n_jobs if n_jobs != -1 else cpu_count()
@@ -180,11 +179,9 @@ def tune_and_predict(
             Parallel(n_jobs=n_workers)(
                 delayed(inner_loop)(
                     n_trials=n_trials // n_workers,
-                    sleep_for=sleep_for,
+                    optuna_storage=optuna_storage,
                 )
-                for sleep_for in np.random.choice(
-                    np.linspace(0, 5, n_workers), n_workers
-                )
+                for _ in range(n_workers)
             )
 
         # refit and evaluate on outer test set

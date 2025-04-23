@@ -32,6 +32,7 @@ class Fit:
     eval_metric: str
     target_times: List[float]
     max_updates: int
+    optuna_storage: Optional[str]
 
 
 @dataclass

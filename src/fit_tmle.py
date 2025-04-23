@@ -66,6 +66,7 @@ def main(cfg: RunConfig):
             eval_metric=cfg.fit.eval_metric,
             n_trials=cfg.fit.n_trials,
             n_jobs=cfg.fit.n_jobs,
+            optuna_storage=cfg.fit.optuna_storage,
         )
     )
     # Save eval_metrics_dict as JSON
@@ -97,8 +98,15 @@ def main(cfg: RunConfig):
         ),
     }
 
+    times = np.quantile(df["event_time"], np.linspace(0, 1, num=100))
+    times = np.unique(times)
     # map the event times to the time grid used by SurvivalBoost
-    time_grid_indices = np.searchsorted(times, df["event_time"])
+    time_grid_indices = (
+        np.searchsorted(
+            np.append(times, [np.max(times) + 1]), df["event_time"], side="right"
+        )
+        - 1
+    )
     df["event_time"] = times[time_grid_indices]
 
     # initialize PyTMLE
@@ -119,7 +127,6 @@ def main(cfg: RunConfig):
         "Fitting TMLE with pre-computed initial estimates from SurvivalBoost..."
     )
     # use only classifiers that natively support missing values (https://scikit-learn.org/stable/modules/impute.html#estimators-that-handle-nan-values)
-    # TODO: maybe just change the default in next PyTMLE release
     propensity_score_models = [
         RandomForestClassifier(),
         HistGradientBoostingClassifier(),
