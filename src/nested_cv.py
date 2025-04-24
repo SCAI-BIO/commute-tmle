@@ -93,7 +93,7 @@ def tune_and_predict(
     logger.info(
         f"Running nested cross validation for SurvivalBoost with hyperparameter tuning based on {eval_metric}"
     )
-    times = np.quantile(y_all["duration"], np.linspace(0, 1, num=100))
+    times = np.quantile(y_all["duration"], np.linspace(0, 1, num=100), method="lower")
     times = np.unique(times)
     cif_predictions_1 = np.empty(
         (X_all.shape[0], len(times), len(y_all["event"].unique()) - 1)
@@ -121,12 +121,12 @@ def tune_and_predict(
             study_name = f"{experiment_prefix}_fold_{i+1}"
         if optuna_storage is None:
             # if no storage is provided, use SQLite
-            optuna_storage = optuna.storages.RDBStorage(
+            storage = optuna.storages.RDBStorage(
                 url=f"sqlite:///{out_path}/optuna_fold{i+1}.db",
                 engine_kwargs={"connect_args": {"timeout": 100}},
             )
             study = optuna.create_study(
-                storage=optuna_storage,
+                storage=storage,
                 direction="minimize" if eval_metric.startswith("ibs") else "maximize",
                 study_name=study_name,
                 load_if_exists=True,

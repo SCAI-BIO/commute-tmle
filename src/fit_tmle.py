@@ -99,8 +99,6 @@ def main(cfg: RunConfig):
         ),
     }
 
-    times = np.quantile(df["event_time"], np.linspace(0, 1, num=100))
-    times = np.unique(times)
     # map the event times to the time grid used by SurvivalBoost
     time_grid_indices = (
         np.searchsorted(
