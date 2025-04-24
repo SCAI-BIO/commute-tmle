@@ -115,22 +115,28 @@ def tune_and_predict(
         skf_outer.split(np.asarray(indices), y_all["event"])
     ):
         logger.info(f"Begin hyperparameter optimization for fold {i+1}/{n_folds_outer}")
+        if experiment_prefix is None:
+            study_name = f"SurvivalBoost fold_{i+1}"
+        else:
+            study_name = f"{experiment_prefix}_fold_{i+1}"
         if optuna_storage is None:
             # if no storage is provided, use SQLite
             optuna_storage = optuna.storages.RDBStorage(
                 url=f"sqlite:///{out_path}/optuna_fold{i+1}.db",
                 engine_kwargs={"connect_args": {"timeout": 100}},
             )
-        if experiment_prefix is None:
-            study_name = f"SurvivalBoost_fold_{i+1}"  #
+            study = optuna.create_study(
+                storage=optuna_storage,
+                direction="minimize" if eval_metric.startswith("ibs") else "maximize",
+                study_name=study_name,
+                load_if_exists=True,
+            )
         else:
-            study_name = f"{experiment_prefix}_fold_{i+1}"
-        study = optuna.create_study(
-            storage=optuna_storage,
-            direction="minimize" if eval_metric.startswith("ibs") else "maximize",
-            study_name=study_name,
-            load_if_exists=True,
-        )
+            # if a storage is provided, use it
+            study = optuna.load_study(
+                study_name=study_name,
+                storage=optuna_storage,
+            )
 
         # split for CV
         X_train_outer = X_all.iloc[outer_train_idx, :]
@@ -141,16 +147,11 @@ def tune_and_predict(
         # inner loop (trials can be optimized)
         def inner_loop(
             n_trials: int,
-            optuna_storage: Union[str, optuna.storages.RDBStorage],
         ):
             """A wrapper for parallelized hyperparameter optimization in the inner loop."""
-            shared_study = optuna.load_study(
-                study_name=study.study_name,
-                storage=optuna_storage,
-            )
             indices_inner = list(range(len(X_train_outer)))
 
-            shared_study.optimize(
+            study.optimize(
                 lambda trial: np.mean(
                     [
                         objective(
@@ -176,7 +177,6 @@ def tune_and_predict(
         if n_jobs == 1:
             inner_loop(
                 n_trials=n_trials,
-                optuna_storage=optuna_storage,
             )
         else:
             n_workers = n_jobs if n_jobs != -1 else cpu_count()
@@ -184,7 +184,6 @@ def tune_and_predict(
             Parallel(n_jobs=n_workers)(
                 delayed(inner_loop)(
                     n_trials=n_trials // n_workers,
-                    optuna_storage=optuna_storage,
                 )
                 for _ in range(n_workers)
             )
