@@ -49,8 +49,14 @@ class Experiment:
 
 
 @dataclass
+class Cohort:
+    name: str
+
+
+@dataclass
 class RunConfig:
     general: General
     fit: Fit
     mock_data: MockData
     experiment: Experiment
+    cohort: Cohort

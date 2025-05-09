@@ -141,6 +141,11 @@ def main(cfg: RunConfig):
         est_df.to_csv(
             f"{cfg.general.output_path}/{pred_type}_estimates.csv", index=False
         )
+        est_g_comp_df = tmle.predict(type=pred_type, g_comp=True)
+        est_g_comp_df.to_csv(
+            f"{cfg.general.output_path}/{pred_type}_estimates_g_computation.csv",
+            index=False,
+        )
         tmle.plot(
             save_path=f"{cfg.general.output_path}/{pred_type}_estimates.svg",
             g_comp=False,

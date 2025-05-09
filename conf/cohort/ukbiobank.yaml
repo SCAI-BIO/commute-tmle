@@ -1,0 +1,41 @@
+name: ukbiobank
+path_main_dataset: ~/COMMUTE/data/ukbiobank/ukb678750_main_dataset.csv
+path_inpatient_diagnoses: ~/COMMUTE/data/ukbiobank/ukb678750_inpatient_diagnoses.csv
+
+features_dict:
+  - 31: biological_sex
+  - 6138: education
+  - 21001: bmi
+  - 1239: smoking_curr
+  - 1249: smoking_prev
+  - 93: blood_pressure_systolic_manual
+  - 4080: blood_pressure_systolic_automatic
+  - 94: blood_pressure_diastolic_manual
+  - 4079: blood_pressure_diastolic_automatic
+  - 1160: sleep_duration
+  - 1200: sleep_insomnia
+  - 738: income
+  - 26410: deprivation_england
+  - 26426: deprivation_wales
+  - 26427: deprivation_scotland
+  - 24003: no2
+  - 24008: pm2510
+
+diagnoses_wildcards:
+    diabetes: ^E11.*
+    hearing_impairment: ^H9[0|1].*
+    depression: ^F3[2|3].*
+    cardiovascular_disease: ^I.*
+    obesity: ^E66.*
+
+set_to_missing:
+  - -1
+  - -3
+  - -7
+
+one_hot_encode:
+  - education
+  - smoking_curr
+  - smoking_prev
+  - sleep_insomnia
+  - income

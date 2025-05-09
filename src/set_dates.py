@@ -319,6 +319,12 @@ def main(cfg: RunConfig):
     else:
         raise ValueError(f"Unknown endpoint: {cfg.experiment.endpoint}")
 
+    if (
+        cfg.experiment.subset == "hospital"
+        and df["hospitalized_due_to_covid"].isnull().all()
+    ):
+        raise RuntimeError("No information available on hospitalization status.")
+
     # split to COVID group and control pool
     covid_df = df.loc[
         (~df["index_date"].isna())
