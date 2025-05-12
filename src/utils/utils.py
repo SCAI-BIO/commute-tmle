@@ -4,14 +4,16 @@ import numpy as np
 from conf.config import Experiment
 
 
-def parse_path_for_experiment(parent_dir: str, experiment: Experiment):
+def parse_path_for_experiment(
+    parent_dir: str, experiment: Experiment, file_extension: str = "csv"
+):
     path = f"{parent_dir}/{experiment.endpoint}_"
     if experiment.wave is not None:
         path += f"{experiment.wave}_"
     path += f"{experiment.control_group_design}"
     if experiment.subset is not None:
         path += f"_{experiment.subset}"
-    path += ".csv"
+    path += "." + file_extension
     return path
 
 

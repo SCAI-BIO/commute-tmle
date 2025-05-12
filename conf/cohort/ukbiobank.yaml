@@ -1,9 +1,12 @@
 name: ukbiobank
 path_main_dataset: ~/COMMUTE/data/ukbiobank/ukb678750_main_dataset.csv
 path_inpatient_diagnoses: ~/COMMUTE/data/ukbiobank/ukb678750_inpatient_diagnoses.csv
+path_self_reported_drugs: ~/COMMUTE/data/ukbiobank/ukb678750_self_reported_medications.csv
+path_atc_map: ~/COMMUTE/data/ukbiobank/atc_map.csv
+female_coded_as_one: false
 
 features_dict:
-  - 31: biological_sex
+  - 31: sex
   - 6138: education
   - 21001: bmi
   - 1239: smoking_curr

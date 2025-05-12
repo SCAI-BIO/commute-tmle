@@ -3,5 +3,6 @@ outputs/
 __pycache__/
 **/__pycache__/
 data/**/*.csv
+data/**/*.json
 commute_tmle_db/
 logfile

@@ -6,7 +6,7 @@ EXPERIMENTS=$(ls ./conf/experiment/*.yaml | xargs -n1 basename | sed 's/\.yaml$/
 
 # hardware requirements
 N_JOBS=1
-MEM_GB=8
+MEM_GB=32
 TIMEOUT_MIN=1440
 # when running on HPC cluster, you may want to add variable for partition
 

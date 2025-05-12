@@ -1,7 +1,13 @@
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from typing import Dict
+from typing import Dict, List
+
+
+"""The merging of all relevant covariates, the diagnoses and prescriptions
+specifically for the UK Biobank. The data processing is hard-coded for this
+dataset and cannot be applied to any other cohort.
+"""
 
 
 def get_latest_available_value_from_main_dataset(
@@ -15,6 +21,9 @@ def get_latest_available_value_from_main_dataset(
     ]
     # Filter dates that are before the target date
     valid_dates = [date for date in dates if date <= row[target]]
+    row = row.drop(
+        [target, "visit_date-0.0", "visit_date-1.0", "visit_date-2.0", "visit_date-3.0"]
+    )
 
     def get_group_key(column_name):
         # Split by '-' and then by '.' to get the necessary parts
@@ -28,17 +37,22 @@ def get_latest_available_value_from_main_dataset(
     row = row.groupby(lambda col: get_group_key(col)).ffill()
 
     if len(valid_dates) == 0:
-        row = row.filter(regex="-0.")
-        row = np.nan
+        # if there is no valid assessment date before the index,
+        # create an empty row with column names corresponding to the others
+        row = pd.Series(
+            [np.nan] * len(row.filter(regex="-0.")),
+            index=[r.replace("-0.", ".") for r in row.index if "-0." in r],
+        )
     else:
+        # filter only the values for the last visit before the index
         visit = np.argmax(valid_dates)
         row = row.filter(regex=f"-{visit}.")
         row.index = row.index.str.replace(f"-{visit}.", ".")
-
     return row
 
 
 def special_cases(df: pd.DataFrame):
+    """Some variables need special processing steps."""
     # education (minimum reported level should count --> the lower the number, the hihger the qualification)
     education = df.filter(regex="^education")
     df["education"] = education.min(axis=1)
@@ -85,6 +99,21 @@ def special_cases(df: pd.DataFrame):
     return df
 
 
+def reformat_icd_codes(row: pd.Series) -> List:
+    row_reformated = row.dropna().tolist()
+
+    def reformat(code):
+        # insert '.' after third position (if length>3)
+        if len(code) > 3:
+            code = code[:3] + "." + code[3:]
+        # trim A, D, S and X (encounter and filler symbols)
+        code = code.rstrip("A").rstrip("D").rstrip("S").strip("X")
+        return code
+
+    row_reformated = [reformat(r) for r in row_reformated]
+    return row_reformated
+
+
 def get_diagnosis_information(
     diag_codes: pd.DataFrame,
     diag_dates: pd.DataFrame,
@@ -93,23 +122,25 @@ def get_diagnosis_information(
     history_years: int = 5,
 ) -> pd.DataFrame:
 
-    diag_dates = diag_dates.to_numpy()
-    index_dates = index_dates.to_numpy()
+    diag_dates_array = diag_dates.to_numpy()
+    index_dates_array = index_dates.to_numpy()
 
-    df = pd.DataFrame()
-    history_start = index_dates - np.timedelta64(history_years * 365, "D")
-    mask_before_index = diag_dates <= index_dates[:, np.newaxis]
-    mask_in_history = mask_before_index & (diag_dates > history_start[:, np.newaxis])
+    df = pd.DataFrame(index=diag_codes.index)
+    history_start = index_dates_array - np.timedelta64(history_years * 365, "D")
+    mask_before_index = diag_dates_array <= index_dates_array[:, np.newaxis]
+    mask_in_history = mask_before_index & (
+        diag_dates_array > history_start[:, np.newaxis]
+    )
+    # count diagnoses in the history period
     df["num_diagnoses"] = mask_in_history.sum(axis=1)
-    diag_dates[~mask_before_index] = np.datetime64("1700-01-01")
+    diag_dates_array[~mask_before_index] = np.datetime64("1700-01-01")
+    # count days since last diagnosis before index
     df["days_since_last_diagnosis"] = (
-        index_dates.astype("datetime64[D]")
-        - diag_dates.max(axis=1).astype("datetime64[D]")
+        index_dates_array.astype("datetime64[D]")
+        - diag_dates_array.max(axis=1).astype("datetime64[D]")
     ).astype(int)
 
-    # TODO: Also store diagnoses and their dates
-
-    # diag_codes = np.where(pd.isnull(diag_codes), "", diag_codes).astype(str)
+    # get boolean variables indicating if specified diagnoses are present before index or not
     for diag, diag_code in diagnoses_wildcards.items():
         tqdm.pandas(desc=f"Map wildcard {diag_code}")
         mapped = diag_codes.progress_apply(
@@ -117,24 +148,92 @@ def get_diagnosis_information(
             axis=1,
         )
         df[diag] = np.any(mapped & mask_before_index, axis=1)
+
+    # store diagnoses and their dates
+    tqdm.pandas(desc="Retrieve diagnoses")
+    diag_codes[~mask_in_history] = np.nan
+    df["diagnoses"] = diag_codes.progress_apply(reformat_icd_codes, axis=1)
+    tqdm.pandas(desc="Retrieve diagnosis dates")
+    diag_dates_array[diag_codes.isnull()] = np.datetime64("NaT")
+    df["diagnosis_dates"] = pd.DataFrame(diag_dates, index=df.index).progress_apply(
+        lambda row: row.dropna().dt.strftime("%Y%m%d").tolist(), axis=1
+    )
+    return df
+
+
+def reformat_medication_codes(row: pd.Series, atc_map: Dict) -> List:
+    """Translate UKB medication codes to ATC codes using the dictionary,
+    and map to fourth level"""
+    row_reformated = row.dropna().tolist()
+    row_reformated = [
+        atc_map[r][:5] if r in atc_map.keys() else "UNK" for r in row_reformated
+    ]
+    return row_reformated
+
+
+def get_self_reported_drug_information(
+    drug_codes: pd.DataFrame,
+    drug_dates: pd.DataFrame,
+    index_dates: pd.Series,
+    atc_map: Dict,
+    history_years: int = 5,
+):
+    drug_dates_array = np.repeat(
+        drug_dates.to_numpy(), drug_codes.shape[1] // drug_dates.shape[1], axis=1
+    )
+    index_dates_array = index_dates.to_numpy()
+    df = pd.DataFrame(index=drug_codes.index)
+
+    history_start = index_dates_array - np.timedelta64(history_years * 365, "D")
+    mask_before_index = ~pd.isnull(drug_dates_array) & (
+        drug_dates_array <= index_dates_array[:, np.newaxis]
+    )
+    mask_in_history = mask_before_index & (
+        drug_dates_array > history_start[:, np.newaxis]
+    )
+    drug_codes[~mask_in_history] = np.nan
+    drug_dates_array[drug_codes.isna()] = np.datetime64("NaT")
+    df["num_drugs"] = (~drug_codes.isnull()).sum(axis=1)
+    # store presciptions and their dates
+    tqdm.pandas(desc="Retrieve drugs")
+    df["drugs"] = drug_codes.progress_apply(
+        reformat_medication_codes, args=(atc_map,), axis=1
+    )
+    tqdm.pandas(desc="Retrieve prescription dates")
+    df["prescription_dates"] = pd.DataFrame(
+        drug_dates_array, index=df.index
+    ).progress_apply(lambda row: row.dropna().dt.strftime("%Y%m%d").tolist(), axis=1)
     return df
 
 
 def merge_covariates_ukbiobank(df: pd.DataFrame, **kwargs) -> pd.DataFrame:
 
-    # read from main dataset
+    # get the necessary variables from kwargs
     path_main_dataset = kwargs.pop("path_main_dataset")
     path_inpatient_diagnoses = kwargs.pop("path_inpatient_diagnoses")
+    path_self_reported_drugs = kwargs.pop("path_self_reported_drugs")
+    path_atc_map = kwargs.pop("path_atc_map")
     features_dict = kwargs.pop("features_dict")
     diagnoses_wildcards = kwargs.pop("diagnoses_wildcards")
     set_to_missing = kwargs.pop("set_to_missing")
     one_hot_encode = kwargs.pop("one_hot_encode")
 
+    # read main dataset from csv
     main_dataset = pd.read_csv(
         path_main_dataset,
         parse_dates=["53-0.0", "53-1.0", "53-2.0", "53-3.0"],
     )
-    df = main_dataset  # TODO: replace with the merged df
+    # merge with the dates df to keep only the patients needed in the experiment
+    df = df.merge(
+        main_dataset,
+        left_on="patient_id",
+        right_on="eid",
+        how="left",
+    ).sort_values(by="patient_id")
+    if df.empty:
+        raise RuntimeError(
+            "It seems like the CSV with input dates does not match the UK Biobank main dataset."
+        )
 
     # rename the main dataset features
     for feat in features_dict:
@@ -157,26 +256,23 @@ def merge_covariates_ukbiobank(df: pd.DataFrame, **kwargs) -> pd.DataFrame:
     repeated_columns = []
     for _, group_list in grouped_columns.items():
         if len(group_list) > 1:
+            # repeated measures are present (e.g., lab features)
             repeated_columns.extend(group_list)
         else:
+            # only one instance of this variable is present (e.g., biological sex)
             unique_columns.extend(group_list)
-
-    # df.merge(main_dataset, left_on="patient_id", right_on="eid", how="outer")
-    # if df.empty:
-    #     raise RuntimeError(
-    #         "It seems like the CSV with input dates does not match the UK Biobank main dataset."
-    #     )
 
     df_only_unique = df[unique_columns]
     df_only_unique.columns = df_only_unique.columns.str.replace(
         r"-(.*)", "", regex=True
     )
-    df_only_repeated = df[repeated_columns]
+    df_only_repeated = df[["index_date"] + repeated_columns]
 
+    # merge latest available covariates before the index
     tqdm.pandas(desc="Merge latest available covariates")
     df_latest_available = df_only_repeated.progress_apply(
         get_latest_available_value_from_main_dataset,
-        args=("visit_date-0.0",),  # TODO: Change to index date!
+        args=("index_date",),
         axis=1,
     )
 
@@ -190,6 +286,7 @@ def merge_covariates_ukbiobank(df: pd.DataFrame, **kwargs) -> pd.DataFrame:
     # one-hot encode selected features
     # df[one_hot_encode] = df[one_hot_encode].astype(str)
     df = pd.get_dummies(df, dummy_na=True, columns=one_hot_encode)
+    df.set_index("eid", inplace=True)
 
     inpatient_diagnoses = pd.read_csv(
         path_inpatient_diagnoses,
@@ -199,22 +296,46 @@ def merge_covariates_ukbiobank(df: pd.DataFrame, **kwargs) -> pd.DataFrame:
             if col.startswith("41280") or col.startswith("41281")
         ],
     )
+    # only keep patients that are also present in df
+    inpatient_diagnoses.sort_values(by="eid", inplace=True)
+    inpatient_diagnoses.set_index("eid", inplace=True)
+    inpatient_diagnoses = inpatient_diagnoses[inpatient_diagnoses.index.isin(df.index)]
+    # store ICD-9 and ICD-10 diagnoses and corresponding dates in separate data frames
     diag_codes = inpatient_diagnoses.filter(regex="^41270|41271").astype(str)
     diag_dates = inpatient_diagnoses.filter(regex="^41280|41281")
 
-    date_range = pd.date_range(start="2017-01-01", end="2022-04-30")
-    random_dates = pd.Series(
-        np.random.choice(date_range, size=len(diag_codes), replace=True)
-    )  # TODO: replace with the real index dates!
+    # get diagnosis counts, days since last diagnosis,
+    # and boolean variables for the presence of selected diagnoses before the index
     df_diagnoses = get_diagnosis_information(
         diag_codes=diag_codes,
         diag_dates=diag_dates,
-        index_dates=random_dates,
+        index_dates=df["index_date"],
         diagnoses_wildcards=diagnoses_wildcards,
     )
 
-    df = pd.concat([df, df_diagnoses], axis=1)
-    # TODO: remove patients without any diagnosis?
+    # read the drugs information
+    self_reported_drugs = pd.read_csv(
+        path_self_reported_drugs,
+        parse_dates=["53-0.0", "53-1.0", "53-2.0", "53-3.0"],
+    )
+    # get self-reported drug counts
+    # only keep patients that are also present in df
+    self_reported_drugs.sort_values(by="eid", inplace=True)
+    self_reported_drugs.set_index("eid", inplace=True)
+    self_reported_drugs = self_reported_drugs[self_reported_drugs.index.isin(df.index)]
+    # reat the ATC map and turn it into a dictionary
+    atc_map_df = pd.read_csv(path_atc_map)
+    atc_map = atc_map_df.set_index("medication_code")["atc"].to_dict()
+    df_drugs = get_self_reported_drug_information(
+        drug_codes=self_reported_drugs.drop(
+            columns=["53-0.0", "53-1.0", "53-2.0", "53-3.0"]
+        ),
+        drug_dates=self_reported_drugs[["53-0.0", "53-1.0", "53-2.0", "53-3.0"]],
+        index_dates=df["index_date"],
+        atc_map=atc_map,
+    )
+    df_diagnoses_drugs = pd.concat([df_diagnoses, df_drugs], axis=1)
+    df = df.merge(df_diagnoses_drugs, how="left", left_index=True, right_index=True)
+    # remove patients without any diagnosis
     df = df[df["num_diagnoses"] > 0]
-    df = df.rename(columns={"eid": "patient_id"})
     return df

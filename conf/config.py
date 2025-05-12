@@ -18,6 +18,7 @@ class General:
     dates_set_path: str
     covariates_merged_path: str
     output_path: str
+    store_json: bool
 
 
 @dataclass
@@ -51,6 +52,7 @@ class Experiment:
 @dataclass
 class Cohort:
     name: str
+    female_coded_as_one: bool
 
 
 @dataclass

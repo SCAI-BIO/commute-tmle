@@ -10,6 +10,7 @@ general:
   dates_set_path: ./data/b_dates_set
   covariates_merged_path: ./data/c_covariates_merged
   output_path: ${hydra:sweep.dir}/${hydra:sweep.subdir}
+  store_json: false
 
 fit:
   exclude_columns:
