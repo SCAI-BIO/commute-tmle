@@ -20,7 +20,7 @@ fit:
   n_trials: 100
   n_folds_outer: 5
   n_folds_inner: 3
-  eval_metric: c_index_1
+  eval_metric: c_antolini_all
   max_updates: 5000
   target_times:
     - 100

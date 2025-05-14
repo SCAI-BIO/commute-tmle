@@ -5,11 +5,13 @@ import logging
 import numpy as np
 import os
 import pandas as pd
+import pickle
 from pytmle import PyTMLE, InitialEstimates
 from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 
 from .nested_cv import tune_and_predict
 from .utils.utils import parse_path_for_experiment, get_hazards_from_cif
+from .utils.plotting import plot_eval_metrics
 from conf.config import RunConfig
 
 # Set up logging
@@ -70,8 +72,16 @@ def main(cfg: RunConfig):
             experiment_prefix=csv_path.split("/")[-1].split(".")[0],
         )
     )
-    # Save eval_metrics_dict as JSON
-    output_json_path = f"{cfg.general.output_path}/nested_cv_eval_metrics.json"
+    # Save eval_metrics_dict as JSON and plots
+    os.makedirs(f"{cfg.general.output_path}/cv_eval_metrics", exist_ok=True)
+    output_json_path = (
+        f"{cfg.general.output_path}/cv_eval_metrics/nested_cv_eval_metrics.json"
+    )
+    plot_eval_metrics(
+        save_path=f"{cfg.general.output_path}/cv_eval_metrics",
+        metrics_dict=eval_metrics_dict,
+        endpoint_name=cfg.experiment.endpoint,
+    )
     with open(output_json_path, "w") as json_file:
         json.dump(eval_metrics_dict, json_file, indent=4)
 
@@ -133,6 +143,11 @@ def main(cfg: RunConfig):
     tmle.fit(
         max_updates=cfg.fit.max_updates, propensity_score_models=propensity_score_models
     )
+
+    # pickle TMLE object
+    logger.info("Saving TMLE object...")
+    with open(f"{cfg.general.output_path}/tmle.pkl", "wb") as f:
+        pickle.dump(tmle, f)
 
     # save TMLE results
     logger.info("Saving TMLE results and diagnostics...")

@@ -1,5 +1,14 @@
 from hazardous import metrics
 import numpy as np
+import pandas as pd
+from pycox.evaluation import EvalSurv
+from sksurv.metrics import (
+    concordance_index_censored,
+    concordance_index_ipcw,
+    cumulative_dynamic_auc,
+)
+from sksurv.util import Surv
+from typing import Dict
 
 from conf.config import Experiment
 
@@ -17,6 +26,70 @@ def parse_path_for_experiment(
     return path
 
 
+def get_metrics_for_one_endpoint(
+    suffix: str,
+    pred: np.ndarray,
+    event_test: pd.Series,
+    duration_test: pd.Series,
+    event_train: pd.Series,
+    duration_train: pd.Series,
+    times: np.ndarray,
+    all_times: np.ndarray,
+) -> Dict[str, float]:
+    metrics_dict = {}
+
+    cum_haz = -np.log(pred)
+    risk_scores = np.sum(cum_haz, axis=1)
+    survival_train = Surv.from_arrays(event_train, time=duration_train)
+    survival_test = Surv.from_arrays(event_test, time=duration_test)
+
+    # Harrel's C from scikit-survival
+    metrics_dict[f"c_harrel_{suffix}"] = concordance_index_censored(
+        event_indicator=event_test,
+        event_time=duration_test,
+        estimate=risk_scores,
+    )[
+        0
+    ].item()  # type: ignore
+
+    # Uno's C from scikit-survival
+    metrics_dict[f"c_uno_{suffix}"] = concordance_index_ipcw(
+        survival_train=survival_train,
+        survival_test=survival_test,
+        estimate=risk_scores,
+        tau=times.max(),
+    )[
+        0
+    ].item()  # type: ignore
+
+    metrics_dict[f"c_antolini_{suffix}"] = EvalSurv(
+        pd.DataFrame(pred.T),
+        duration_test.values,
+        event_test.values,
+        censor_surv="km",
+    ).concordance_td()
+
+    # AUC(t) from scikit-survival
+    auc_t, mean_auc_t = cumulative_dynamic_auc(
+        survival_train=survival_train,
+        survival_test=survival_test,
+        estimate=risk_scores,
+        times=times,
+    )
+    metrics_dict[f"auc_mean_{suffix}"] = mean_auc_t.item()
+    metrics_dict[f"auc_t_{suffix}"] = auc_t.tolist()
+    metrics_dict[f"times_{suffix}"] = times.tolist()
+
+    metrics_dict[f"ibs_{suffix}"] = metrics.integrated_brier_score_survival(
+        y_test={"event": event_test, "duration": duration_test},
+        y_pred=pred,
+        y_train={"event": event_train, "duration": duration_train},
+        times=all_times,
+    ).item()
+
+    return metrics_dict
+
+
 def get_metrics(
     y_test,
     y_pred,
@@ -24,50 +97,71 @@ def get_metrics(
     y_train,
     times,
 ):
-    y_test_cens = y_test.copy()
-    y_test_cens["event"] = (y_test_cens["event"] == 0).astype(int)
-    y_train_cens = y_train.copy()
-    y_train_cens["event"] = (y_train_cens["event"] == 0).astype(int)
+    y_pred = y_pred[y_test["duration"] < max(y_train["duration"]), :]
+    y_pred_cens = y_pred_cens[y_test["duration"] < max(y_train["duration"]), :]
+    y_test = y_test[y_test["duration"] < max(y_train["duration"])]
+    # Uno's C and AUC(t) will only be evaluated for times that are in the range of event times (per event type)
+    test_times = times[
+        (times > y_test.loc[:, "duration"].min())
+        & (times < y_test.loc[:, "duration"].max())
+    ]
+
     metrics_dict = {}
-    metrics_dict["c_index_0"] = metrics.concordance_index_incidence(
-        y_test_cens, 1 - y_pred_cens, y_train=y_train_cens, event_of_interest=1
-    ).item()
-    metrics_dict["c_index_1"] = metrics.concordance_index_incidence(
-        y_test, y_pred[:, 1, :], y_train=y_train, event_of_interest=1
-    ).item()
-    metrics_dict["c_index_2"] = metrics.concordance_index_incidence(
-        y_test, y_pred[:, 2, :], y_train=y_train, event_of_interest=2
-    ).item()
-    accuracy_in_time, tau = metrics.accuracy_in_time(
-        y_test, y_pred[:, 1:, :], time_grid=times
+    # for censoring endpoint
+    metrics_dict.update(
+        get_metrics_for_one_endpoint(
+            suffix="0",
+            pred=y_pred_cens,
+            event_test=y_test["event"] == 0,
+            duration_test=y_test["duration"],
+            event_train=y_train["event"] == 0,
+            duration_train=y_train["duration"],
+            times=test_times,
+            all_times=times,
+        )
     )
-    metrics_dict["accuracy_in_time_any"] = accuracy_in_time.tolist()
-    metrics_dict["mean_accuracy_in_time_any"] = np.mean(accuracy_in_time).item()
-    metrics_dict["tau"] = tau.tolist()
-    metrics_dict["ibs_0"] = metrics.integrated_brier_score_survival(
-        y_test=y_test_cens, y_pred=y_pred_cens, y_train=y_train_cens, times=times
-    ).item()
-    metrics_dict["ibs_1"] = metrics.integrated_brier_score_incidence(
-        y_test=y_test,
-        y_pred=y_pred[:, 1, :],
-        y_train=y_train,
-        times=times,
-        event_of_interest=1,  # type: ignore
-    ).item()
-    metrics_dict["ibs_2"] = metrics.integrated_brier_score_incidence(
-        y_test=y_test,
-        y_pred=y_pred[:, 2, :],
-        y_train=y_train,
-        times=times,
-        event_of_interest=2,  # type: ignore
-    ).item()
-    metrics_dict["ibs_any"] = metrics.integrated_brier_score_incidence(
-        y_test=y_test,
-        y_pred=1 - y_pred[:, 0, :],
-        y_train=y_train,
-        times=times,
-        event_of_interest="any",
-    ).item()
+
+    # for event 1 endpoint (NDD diagnosis)
+    metrics_dict.update(
+        get_metrics_for_one_endpoint(
+            suffix="1",
+            pred=1 - y_pred[:, 1, :],
+            event_test=y_test["event"] == 1,
+            duration_test=y_test["duration"],
+            event_train=y_train["event"] == 1,
+            duration_train=y_train["duration"],
+            times=test_times,
+            all_times=times,
+        )
+    )
+
+    # for event 2 endpoint (death)
+    metrics_dict.update(
+        get_metrics_for_one_endpoint(
+            suffix="2",
+            pred=1 - y_pred[:, 2, :],
+            event_test=y_test["event"] == 2,
+            duration_test=y_test["duration"],
+            event_train=y_train["event"] == 2,
+            duration_train=y_train["duration"],
+            times=test_times,
+            all_times=times,
+        )
+    )
+
+    # for overall survival endpoint
+    metrics_dict.update(
+        get_metrics_for_one_endpoint(
+            suffix="all",
+            pred=y_pred[:, 0, :],
+            event_test=y_test["event"] > 0,
+            duration_test=y_test["duration"],
+            event_train=y_train["event"] > 0,
+            duration_train=y_train["duration"],
+            times=test_times,
+            all_times=times,
+        )
+    )
 
     return metrics_dict
 
