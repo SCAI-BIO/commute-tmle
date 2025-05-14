@@ -193,6 +193,5 @@ dependencies:
       - scikit-survival==0.24.1
       - sympy==1.13.3
       - texttable==1.7.0
-      - torch==2.7.0+cpu
       - torchtuples==0.2.2
       - urllib3==2.4.0

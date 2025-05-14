@@ -1,16 +1,28 @@
 from hazardous import metrics
 import numpy as np
 import pandas as pd
-from pycox.evaluation import EvalSurv
 from sksurv.metrics import (
     concordance_index_censored,
     concordance_index_ipcw,
     cumulative_dynamic_auc,
 )
 from sksurv.util import Surv
+import sys
 from typing import Dict
+from unittest.mock import MagicMock
 
 from conf.config import Experiment
+
+# a hack to avoid torch requirement in the environment (it's never really needed, but the import crashes if it's not found)
+sys.modules["torch"] = MagicMock()
+sys.modules["torch"].__version__ = "2.7.0"
+sys.modules["torch.nn"] = MagicMock()
+sys.modules["torch.nn.functional"] = MagicMock()
+sys.modules["torch.optim"] = MagicMock()
+sys.modules["torch.utils"] = MagicMock()
+sys.modules["torch.utils.data"] = MagicMock()
+
+from pycox.evaluation import EvalSurv
 
 
 def parse_path_for_experiment(
@@ -38,7 +50,7 @@ def get_metrics_for_one_endpoint(
 ) -> Dict[str, float]:
     metrics_dict = {}
 
-    cum_haz = -np.log(pred)
+    cum_haz = -np.log(pred + 1e-10)  # add small constant to avoid log(0)
     risk_scores = np.sum(cum_haz, axis=1)
     survival_train = Surv.from_arrays(event_train, time=duration_train)
     survival_test = Surv.from_arrays(event_test, time=duration_test)
@@ -80,6 +92,7 @@ def get_metrics_for_one_endpoint(
     metrics_dict[f"auc_t_{suffix}"] = auc_t.tolist()
     metrics_dict[f"times_{suffix}"] = times.tolist()
 
+    # Integrated Brier Score from hazardous
     metrics_dict[f"ibs_{suffix}"] = metrics.integrated_brier_score_survival(
         y_test={"event": event_test, "duration": duration_test},
         y_pred=pred,
