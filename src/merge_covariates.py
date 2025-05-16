@@ -9,7 +9,7 @@ from conf.config import RunConfig
 
 # Set up the config store
 cs = ConfigStore.instance()
-cs.store(name="pipeline_config", node=RunConfig)
+cs.store(name="run_config", node=RunConfig)
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")

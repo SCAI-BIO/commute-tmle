@@ -11,6 +11,7 @@ general:
   covariates_merged_path: ./data/c_covariates_merged
   output_path: ${hydra:sweep.dir}/${hydra:sweep.subdir}
   store_json: false
+  pickle_tmle: false
 
 fit:
   exclude_columns:

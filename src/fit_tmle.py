@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Set up the config store
 cs = ConfigStore.instance()
-cs.store(name="pipeline_config", node=RunConfig)
+cs.store(name="run_config", node=RunConfig)
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
@@ -144,10 +144,11 @@ def main(cfg: RunConfig):
         max_updates=cfg.fit.max_updates, propensity_score_models=propensity_score_models
     )
 
-    # pickle TMLE object
-    logger.info("Saving TMLE object...")
-    with open(f"{cfg.general.output_path}/tmle.pkl", "wb") as f:
-        pickle.dump(tmle, f)
+    if cfg.general.pickle_tmle:
+        # pickle TMLE object
+        logger.info("Saving TMLE object...")
+        with open(f"{cfg.general.output_path}/tmle.pkl", "wb") as f:
+            pickle.dump(tmle, f)
 
     # save TMLE results
     logger.info("Saving TMLE results and diagnostics...")

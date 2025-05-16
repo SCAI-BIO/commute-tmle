@@ -11,7 +11,7 @@ from conf.config import RunConfig
 
 # Set up the config store
 cs = ConfigStore.instance()
-cs.store(name="pipeline_config", node=RunConfig)
+cs.store(name="run_config", node=RunConfig)
 
 
 # filter functions for infection waves

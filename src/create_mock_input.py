@@ -7,7 +7,7 @@ from conf.config import RunConfig
 
 # Set up the config store
 cs = ConfigStore.instance()
-cs.store(name="pipeline_config", node=RunConfig)
+cs.store(name="run_config", node=RunConfig)
 
 
 def generate_random_date(start: str, end: str, n: int, missing_prob: float = 0.0):

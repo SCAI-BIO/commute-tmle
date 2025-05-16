@@ -19,6 +19,7 @@ class General:
     covariates_merged_path: str
     output_path: str
     store_json: bool
+    pickle_tmle: bool
 
 
 @dataclass
