@@ -6,7 +6,7 @@ EXPERIMENTS=$(ls ./conf/experiment/*.yaml | xargs -n1 basename | sed 's/\.yaml$/
 TARGET_TIMES="[100,200,300,400,500,600,700]"
 
 # for stratification
-SUBSET_CONDITION=null # e.g., "age_at_index<80"
+SUBSET_CONDITION="event_time > 30" # e.g., "age_at_index<80"
 
 # for cross-fitting
 N_FOLDS_OUTER=5
