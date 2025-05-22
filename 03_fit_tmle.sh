@@ -47,6 +47,7 @@ else
     sed -i 's/#listen_addresses/listen_addresses/g' commute_tmle_db/postgresql.conf
     sed -i 's/localhost/*/g' commute_tmle_db/postgresql.conf
     echo -e "host\tall\tall\t0.0.0.0/0\tmd5" >> commute_tmle_db/pg_hba.conf
+    sed -i "s/max_connections = 100/max_connections = 1000/g" commute_tmle_db/postgresql.conf
     pg_ctl -o "-F -p ${OPTUNA_STORAGE_PORT}" -D commute_tmle_db restart
     psql -d postgres -p ${OPTUNA_STORAGE_PORT} -c "CREATE USER commute WITH PASSWORD '${OPTUNA_STORAGE_PASSWORD}';"
     createdb -p ${OPTUNA_STORAGE_PORT} -O commute optuna

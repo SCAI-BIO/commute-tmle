@@ -79,8 +79,11 @@ def sample_control_censoring_dates(
     """
     Sample follow-up times from COVID group to set censoring dates accordingly for the control group.
     """
-    sample_indices = np.random.randint(0, len(covid_df), size=len(control_pool_df))
-    fu_samples = covid_df.event_time.values[sample_indices]
+    covid_df_only_censored = covid_df[covid_df["event_indicator"] == 0]
+    sample_indices = np.random.randint(
+        0, len(covid_df_only_censored), size=len(control_pool_df)
+    )
+    fu_samples = covid_df_only_censored.event_time.values[sample_indices]
     censoring_samples = control_pool_df["index_date"] + pd.to_timedelta(
         fu_samples, unit="D"
     )
@@ -204,10 +207,8 @@ def equal_control_fu(
     control_pool_df["index_date"] = sample_control_index_dates(
         covid_df, control_pool_df, sample_age=False
     )
-    # censoring dates will be set after follow-up corresponding to that of a sampled COVID patient
-    control_pool_df["censoring_date"] = sample_control_censoring_dates(
-        covid_df, control_pool_df
-    )
+    # set censoring_date to global censoring
+    control_pool_df["censoring_date"] = control_pool_df["censoring_global"]
     control_pool_df["age_at_index"] = (
         control_pool_df["index_date"] - control_pool_df["birth_date"]
     ).dt.days
@@ -259,10 +260,8 @@ def tested_positive_vs_negative(
     control_pool_df["index_date"] = sample_control_index_dates(
         covid_df, control_pool_df, sample_age=False
     )
-    # censoring dates will be set after follow-up corresponding to that of a sampled COVID patient
-    control_pool_df["censoring_date"] = sample_control_censoring_dates(
-        covid_df, control_pool_df
-    )
+    # set censoring_date to global censoring
+    control_pool_df["censoring_date"] = control_pool_df["censoring_global"]
     control_pool_df["age_at_index"] = (
         control_pool_df["index_date"] - control_pool_df["birth_date"]
     ).dt.days
