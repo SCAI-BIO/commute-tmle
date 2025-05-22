@@ -44,7 +44,6 @@ def main(cfg: RunConfig):
             df_merged["sex"] = df_merged["sex"].replace({0: "Male", 1: "Female"})
         else:
             df_merged["sex"] = df_merged["sex"].replace({1: "Male", 0: "Female"})
-        df_merged["state"] = "UNK"
         endpoint_dict = {0: "", 1: cfg.experiment.endpoint, 2: "death"}
         df_merged["endpoint_labels"] = df_merged["event_indicator"].apply(
             lambda x: [endpoint_dict[x]]
@@ -64,6 +63,9 @@ def main(cfg: RunConfig):
                 "drugs",
                 "prescription_dates",
                 "exposed",
+                "num_diagnoses",
+                "num_drugs",
+                "days_since_last_diagnosis",
             ],
             errors="ignore",
         ).apply(lambda x: x.to_dict(), axis=1)
