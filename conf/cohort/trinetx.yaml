@@ -1,0 +1,16 @@
+name: trinetx
+db: das_fraunhofer_covid19ndd_dwusa_20250515
+female_coded_as_one: false
+
+# only TNX codes should be used here! only for features present in lab_result or vitals_signs
+features_dict:
+  bmi: "9083"
+  blood_pressure_systolic: "9085"
+  blood_pressure_diastolic: "9086"
+
+diagnoses_wildcards: 
+    diabetes: ^E11$
+    hearing_impairment: ^H9[01]$
+    depression: ^F3[23]$
+    obesity: ^E66$
+    cardiovascular_disease: ^I[0-9][0-9]$
