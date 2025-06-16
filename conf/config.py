@@ -35,6 +35,7 @@ class Fit:
     target_times: List[float]
     max_updates: int
     optuna_storage: Optional[str]
+    tune_hyperparameters: bool
 
 
 @dataclass
@@ -57,9 +58,18 @@ class Cohort:
 
 
 @dataclass
+class SurvivalBoostParams:
+    n_iter: int
+    learning_rate: float
+    max_depth: int
+    min_samples_leaf: int
+
+
+@dataclass
 class RunConfig:
     general: General
     fit: Fit
     mock_data: MockData
     experiment: Experiment
     cohort: Cohort
+    survivalboost_params: SurvivalBoostParams

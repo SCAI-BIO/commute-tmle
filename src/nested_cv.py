@@ -89,10 +89,21 @@ def tune_and_predict(
     n_jobs: int,
     optuna_storage: Optional[Union[str, optuna.storages.RDBStorage]] = None,
     experiment_prefix: Optional[str] = None,
+    skip_tuning: bool = False,
+    given_hyperparameters: Optional[dict] = None,
 ):
-    logger.info(
-        f"Running nested cross validation for SurvivalBoost with hyperparameter tuning based on {eval_metric}"
-    )
+    if skip_tuning:
+        if given_hyperparameters is None:
+            raise ValueError(
+                "If skip_tuning is True, given_hyperparameters must be provided."
+            )
+        logger.info(
+            "Running nested cross validation for SurvivalBoost with given hyperparameters"
+        )
+    else:
+        logger.info(
+            f"Running nested cross validation for SurvivalBoost with hyperparameter tuning based on {eval_metric}"
+        )
     times = np.quantile(y_all["duration"], np.linspace(0, 1, num=100), method="lower")
     times = np.unique(times)
     cif_predictions_1 = np.empty(
@@ -114,82 +125,91 @@ def tune_and_predict(
     for i, (outer_train_idx, outer_test_idx) in enumerate(
         skf_outer.split(np.asarray(indices), y_all["event"])
     ):
-        logger.info(f"Begin hyperparameter optimization for fold {i+1}/{n_folds_outer}")
-        if experiment_prefix is None:
-            study_name = f"SurvivalBoost fold_{i+1}"
-        else:
-            study_name = f"{experiment_prefix}_fold_{i+1}"
-        if optuna_storage is None:
-            # if no storage is provided, use SQLite
-            storage = optuna.storages.RDBStorage(
-                url=f"sqlite:///{out_path}/optuna_fold{i+1}.db",
-                engine_kwargs={"connect_args": {"timeout": 100}},
-            )
-            study = optuna.create_study(
-                storage=storage,
-                direction="minimize" if eval_metric.startswith("ibs") else "maximize",
-                study_name=study_name,
-                load_if_exists=True,
-            )
-        else:
-            # if a storage is provided, use it
-            study = optuna.load_study(
-                study_name=study_name,
-                storage=optuna_storage,
-            )
-
         # split for CV
         X_train_outer = X_all.iloc[outer_train_idx, :]
         y_train_outer = y_all.iloc[outer_train_idx, :]
         X_test_outer = X_all.iloc[outer_test_idx, :]
         y_test_outer = y_all.iloc[outer_test_idx, :]
 
-        # inner loop (trials can be optimized)
-        def inner_loop(
-            n_trials: int,
-        ):
-            """A wrapper for parallelized hyperparameter optimization in the inner loop."""
-            indices_inner = list(range(len(X_train_outer)))
-
-            study.optimize(
-                lambda trial: np.mean(
-                    [
-                        objective(
-                            trial,
-                            X_train_outer.iloc[inner_train_idx],
-                            y_train_outer.iloc[inner_train_idx],
-                            X_train_outer.iloc[inner_val_idx],
-                            y_train_outer.iloc[inner_val_idx],
-                            eval_metric=eval_metric,
-                            times=times,
-                        )
-                        for inner_train_idx, inner_val_idx in skf_inner.split(
-                            np.asarray(indices_inner),
-                            [endpoint for endpoint in y_train_outer["event"]],  # type: ignore
-                        )
-                    ]
-                ),
-                n_trials,
-                gc_after_trial=True,
-            )
-
-        # hyper parameter optimization
-        if n_jobs == 1:
-            inner_loop(
-                n_trials=n_trials,
-            )
+        if skip_tuning:
+            best_param = given_hyperparameters
         else:
-            n_workers = n_jobs if n_jobs != -1 else cpu_count()
-            n_workers = min(n_workers, n_trials)
-            Parallel(n_jobs=n_workers)(
-                delayed(inner_loop)(
-                    n_trials=n_trials // n_workers,
-                )
-                for _ in range(n_workers)
+            # ensure that the outer test set is not empty
+            logger.info(
+                f"Begin hyperparameter optimization for fold {i+1}/{n_folds_outer}"
             )
+            if experiment_prefix is None:
+                study_name = f"SurvivalBoost fold_{i+1}"
+            else:
+                study_name = f"{experiment_prefix}_fold_{i+1}"
+            if optuna_storage is None:
+                # if no storage is provided, use SQLite
+                storage = optuna.storages.RDBStorage(
+                    url=f"sqlite:///{out_path}/optuna_fold{i+1}.db",
+                    engine_kwargs={"connect_args": {"timeout": 100}},
+                )
+                study = optuna.create_study(
+                    storage=storage,
+                    direction=(
+                        "minimize" if eval_metric.startswith("ibs") else "maximize"
+                    ),
+                    study_name=study_name,
+                    load_if_exists=True,
+                )
+            else:
+                # if a storage is provided, use it
+                study = optuna.load_study(
+                    study_name=study_name,
+                    storage=optuna_storage,
+                )
 
-        # refit and evaluate on outer test set
-        best_param = study.best_params
+            # inner loop (trials can be optimized)
+            def inner_loop(
+                n_trials: int,
+            ):
+                """A wrapper for parallelized hyperparameter optimization in the inner loop."""
+                indices_inner = list(range(len(X_train_outer)))
+
+                study.optimize(
+                    lambda trial: np.mean(
+                        [
+                            objective(
+                                trial,
+                                X_train_outer.iloc[inner_train_idx],
+                                y_train_outer.iloc[inner_train_idx],
+                                X_train_outer.iloc[inner_val_idx],
+                                y_train_outer.iloc[inner_val_idx],
+                                eval_metric=eval_metric,
+                                times=times,
+                            )
+                            for inner_train_idx, inner_val_idx in skf_inner.split(
+                                np.asarray(indices_inner),
+                                [endpoint for endpoint in y_train_outer["event"]],  # type: ignore
+                            )
+                        ]
+                    ),
+                    n_trials,
+                    gc_after_trial=True,
+                )
+
+            # hyper parameter optimization
+            if n_jobs == 1:
+                inner_loop(
+                    n_trials=n_trials,
+                )
+            else:
+                n_workers = n_jobs if n_jobs != -1 else cpu_count()
+                n_workers = min(n_workers, n_trials)
+                Parallel(n_jobs=n_workers)(
+                    delayed(inner_loop)(
+                        n_trials=n_trials // n_workers,
+                    )
+                    for _ in range(n_workers)
+                )
+
+            # refit and evaluate on outer test set
+            best_param = study.best_params
+
         clf = SB(**best_param, show_progressbar=False)
         clf.fit(X_train_outer, y_train_outer, times=times)
 

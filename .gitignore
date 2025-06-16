@@ -6,3 +6,4 @@ data/**/*.csv
 data/**/*.json
 commute_tmle_db/
 logfile
+.vscode/

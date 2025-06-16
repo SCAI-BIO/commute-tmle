@@ -2,6 +2,8 @@ defaults:
 - _self_
 - /hydra/callbacks:
    - log_job_return_callback
+- survivalboost_params:
+   - default
 
 general:
   seed: 1234
@@ -34,6 +36,7 @@ fit:
   undersample_exposure_groups: true
   subset_condition: event_time > 30
   optuna_storage: null
+  tune_hyperparameters: true
 
 mock_data:
   n: 1000

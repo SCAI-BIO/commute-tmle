@@ -3,6 +3,7 @@ from hydra.core.config_store import ConfigStore
 import json
 import logging
 import numpy as np
+from omegaconf import OmegaConf
 import os
 import pandas as pd
 import pickle
@@ -54,7 +55,7 @@ def main(cfg: RunConfig):
         )
 
     # cross fitting of SurvivalBoost model with hyperparameter tuning
-    logger.info("Cross-fitting SurvivalBoost model with hyperparameter tuning...")
+    logger.info("Cross-fitting SurvivalBoost model...")
     cif_1, cif_0, surv_1, surv_0, cens_surv_1, cens_surv_0, times, eval_metrics_dict = (
         tune_and_predict(
             X_all=df.drop(columns=["event_indicator", "event_time"]),
@@ -70,6 +71,10 @@ def main(cfg: RunConfig):
             n_jobs=cfg.fit.n_jobs,
             optuna_storage=cfg.fit.optuna_storage,
             experiment_prefix=csv_path.split("/")[-1].split(".")[0],
+            skip_tuning=not cfg.fit.tune_hyperparameters,
+            given_hyperparameters=OmegaConf.to_container(
+                cfg.survivalboost_params, resolve=True
+            ),
         )
     )
     # Save eval_metrics_dict as JSON and plots
