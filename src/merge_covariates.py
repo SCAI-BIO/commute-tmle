@@ -21,19 +21,19 @@ def main(cfg: RunConfig):
     )
     # direct to the cohort-specific merge function implemented in the cohort_specific folder
     merge_covariates_fn = COHORT_SPECIFIC_COV_MERGE_FUNCTIONS[cfg.cohort.name]
-    df_merged = merge_covariates_fn(
-        df, **OmegaConf.to_container(cfg.cohort, resolve=True)
+    df_merged_one_hot, df_merged = merge_covariates_fn(
+        df,
+        get_codes=cfg.general.store_json,
+        **OmegaConf.to_container(cfg.cohort, resolve=True)
     )
+    df_merged_one_hot = df_merged_one_hot.set_index("patient_id")
     df_merged = df_merged.set_index("patient_id")
 
-    # save df_merged
+    # save df_merged_one_hot (for PyTMLE)
     save_path = parse_path_for_experiment(
         cfg.general.covariates_merged_path, cfg.experiment
     )
-    df_merged.drop(
-        columns=["diagnoses", "diagnosis_dates", "drugs", "prescription_dates"],
-        errors="ignore",
-    ).to_csv(save_path, float_format="%.2f")
+    df_merged_one_hot.to_csv(save_path, float_format="%.2f")
 
     if cfg.general.store_json:
         """This whole code block is not needed for the appplication of PyTMLE.

@@ -14,15 +14,25 @@ from unittest.mock import MagicMock
 from conf.config import Experiment
 
 # a hack to avoid torch requirement in the environment (it's never really needed, but the import crashes if it's not found)
-sys.modules["torch"] = MagicMock()
-sys.modules["torch"].__version__ = "2.7.0"
-sys.modules["torch.nn"] = MagicMock()
-sys.modules["torch.nn.functional"] = MagicMock()
-sys.modules["torch.optim"] = MagicMock()
-sys.modules["torch.utils"] = MagicMock()
-sys.modules["torch.utils.data"] = MagicMock()
+try:
+    import torch
+
+    torch_is_magic_mock = False
+except ImportError:
+    sys.modules["torch"] = MagicMock()
+    sys.modules["torch"].__version__ = "2.7.0"
+    sys.modules["torch.nn"] = MagicMock()
+    sys.modules["torch.nn.functional"] = MagicMock()
+    sys.modules["torch.optim"] = MagicMock()
+    sys.modules["torch.utils"] = MagicMock()
+    sys.modules["torch.utils.data"] = MagicMock()
+    torch_is_magic_mock = True
 
 from pycox.evaluation import EvalSurv
+
+# remove the mock to avoid issues with other imports
+if torch_is_magic_mock:
+    sys.modules.pop("torch")
 
 
 def parse_path_for_experiment(

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 
 """The merging of all relevant covariates, the diagnoses and prescriptions
@@ -120,6 +120,7 @@ def get_diagnosis_information(
     index_dates: pd.Series,
     diagnoses_wildcards: Dict,
     history_years: int = 5,
+    get_diagnosis_codes: bool = False,
 ) -> pd.DataFrame:
 
     diag_dates_array = diag_dates.to_numpy()
@@ -149,15 +150,16 @@ def get_diagnosis_information(
         )
         df[diag] = np.any(mapped & mask_before_index, axis=1)
 
-    # store diagnoses and their dates
-    tqdm.pandas(desc="Retrieve diagnoses")
-    diag_codes[~mask_in_history] = np.nan
-    df["diagnoses"] = diag_codes.progress_apply(reformat_icd_codes, axis=1)
-    tqdm.pandas(desc="Retrieve diagnosis dates")
-    diag_dates_array[diag_codes.isnull()] = np.datetime64("NaT")
-    df["diagnosis_dates"] = pd.DataFrame(diag_dates, index=df.index).progress_apply(
-        lambda row: row.dropna().dt.strftime("%Y%m%d").tolist(), axis=1
-    )
+    if get_diagnosis_codes:
+        # store diagnoses and their dates
+        tqdm.pandas(desc="Retrieve diagnoses")
+        diag_codes[~mask_in_history] = np.nan
+        df["diagnoses"] = diag_codes.progress_apply(reformat_icd_codes, axis=1)
+        tqdm.pandas(desc="Retrieve diagnosis dates")
+        diag_dates_array[diag_codes.isnull()] = np.datetime64("NaT")
+        df["diagnosis_dates"] = pd.DataFrame(diag_dates, index=df.index).progress_apply(
+            lambda row: row.dropna().dt.strftime("%Y%m%d").tolist(), axis=1
+        )
     return df
 
 
@@ -177,6 +179,7 @@ def get_self_reported_drug_information(
     index_dates: pd.Series,
     atc_map: Dict,
     history_years: int = 5,
+    get_drug_codes: bool = False,
 ):
     drug_dates_array = np.repeat(
         drug_dates.to_numpy(), drug_codes.shape[1] // drug_dates.shape[1], axis=1
@@ -194,19 +197,25 @@ def get_self_reported_drug_information(
     drug_codes[~mask_in_history] = np.nan
     drug_dates_array[drug_codes.isna()] = np.datetime64("NaT")
     df["num_drugs"] = (~drug_codes.isnull()).sum(axis=1)
-    # store presciptions and their dates
-    tqdm.pandas(desc="Retrieve drugs")
-    df["drugs"] = drug_codes.progress_apply(
-        reformat_medication_codes, args=(atc_map,), axis=1
-    )
-    tqdm.pandas(desc="Retrieve prescription dates")
-    df["prescription_dates"] = pd.DataFrame(
-        drug_dates_array, index=df.index
-    ).progress_apply(lambda row: row.dropna().dt.strftime("%Y%m%d").tolist(), axis=1)
+
+    if get_drug_codes:
+        # store presciptions and their dates
+        tqdm.pandas(desc="Retrieve drugs")
+        df["drugs"] = drug_codes.progress_apply(
+            reformat_medication_codes, args=(atc_map,), axis=1
+        )
+        tqdm.pandas(desc="Retrieve prescription dates")
+        df["prescription_dates"] = pd.DataFrame(
+            drug_dates_array, index=df.index
+        ).progress_apply(
+            lambda row: row.dropna().dt.strftime("%Y%m%d").tolist(), axis=1
+        )
     return df
 
 
-def merge_covariates_ukbiobank(df: pd.DataFrame, **kwargs) -> pd.DataFrame:
+def merge_covariates_ukbiobank(
+    df: pd.DataFrame, get_codes: bool = False, **kwargs
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
     # get the necessary variables from kwargs
     path_main_dataset = kwargs.pop("path_main_dataset")
@@ -285,7 +294,6 @@ def merge_covariates_ukbiobank(df: pd.DataFrame, **kwargs) -> pd.DataFrame:
 
     # one-hot encode selected features
     # df[one_hot_encode] = df[one_hot_encode].astype(str)
-    df = pd.get_dummies(df, dummy_na=True, columns=one_hot_encode)
     df.set_index("eid", inplace=True)
 
     inpatient_diagnoses = pd.read_csv(
@@ -311,6 +319,7 @@ def merge_covariates_ukbiobank(df: pd.DataFrame, **kwargs) -> pd.DataFrame:
         diag_dates=diag_dates,
         index_dates=df["index_date"],
         diagnoses_wildcards=diagnoses_wildcards,
+        get_diagnosis_codes=get_codes,
     )
 
     # read the drugs information
@@ -333,9 +342,22 @@ def merge_covariates_ukbiobank(df: pd.DataFrame, **kwargs) -> pd.DataFrame:
         drug_dates=self_reported_drugs[["53-0.0", "53-1.0", "53-2.0", "53-3.0"]],
         index_dates=df["index_date"],
         atc_map=atc_map,
+        get_drug_codes=get_codes,
     )
     df_diagnoses_drugs = pd.concat([df_diagnoses, df_drugs], axis=1)
     df = df.merge(df_diagnoses_drugs, how="left", left_index=True, right_index=True)
     # remove patients without any diagnosis
     df = df[df["num_diagnoses"] > 0]
-    return df
+
+    # categorical variables should be str
+    df[one_hot_encode] = df[one_hot_encode].astype(str).replace({"nan": None})
+
+    # remove diagnoses and drugs from the main df
+    df_one_hot = df.drop(
+        columns=["diagnoses", "diagnosis_dates", "drugs", "prescription_dates"],
+        errors="ignore",
+    )
+    # one-hot encode the categorical variables
+    df_one_hot = pd.get_dummies(df_one_hot, columns=one_hot_encode)
+
+    return df_one_hot, df
