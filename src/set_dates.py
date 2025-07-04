@@ -19,7 +19,7 @@ waves_fns = {
     None: lambda x: x >= "2020-01-01",
     "first_wave": lambda x: (x >= "2020-01-01") & (x <= "2020-08-31"),
     "second_wave": lambda x: (x >= "2020-09-01") & (x <= "2021-05-31"),
-    "third_wave": lambda x: (x >= "2021-06-01") & (x <= "2021-11-31"),
+    "third_wave": lambda x: (x >= "2021-06-01") & (x <= "2021-11-30"),
     "omicron_wave": lambda x: (x >= "2021-12-01") & (x <= "2022-06-30"),
 }
 
