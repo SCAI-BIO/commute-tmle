@@ -153,7 +153,7 @@ def main(cfg: RunConfig):
                 else quantile_bins[-1]
             )
         )
-        models = [SurvivalBoost(**cfg.survivalboost_params)]
+        models = [SurvivalBoost(**cfg.survivalboost_params, show_progressbar=False)]
 
     # initialize PyTMLE
     target_times = [t for t in cfg.fit.target_times if t <= df["event_time"].max()]
@@ -170,9 +170,7 @@ def main(cfg: RunConfig):
     )
 
     # fit TMLE
-    logger.info(
-        "Fitting TMLE with pre-computed initial estimates from SurvivalBoost..."
-    )
+    logger.info("Fitting TMLE...")
     # use only classifiers that natively support missing values (https://scikit-learn.org/stable/modules/impute.html#estimators-that-handle-nan-values)
     propensity_score_models = [
         RandomForestClassifier(),
