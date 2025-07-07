@@ -36,6 +36,7 @@ class Fit:
     max_updates: int
     optuna_storage: Optional[str]
     tune_hyperparameters: bool
+    run_evalues_benchmark: bool
 
 
 @dataclass

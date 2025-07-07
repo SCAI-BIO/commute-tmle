@@ -1,3 +1,4 @@
+from hazardous import SurvivalBoost
 import hydra
 from hydra.core.config_store import ConfigStore
 import json
@@ -54,10 +55,19 @@ def main(cfg: RunConfig):
             f"Using subset of {len(df)} patients with undersampled exposure groups"
         )
 
-    # cross fitting of SurvivalBoost model with hyperparameter tuning
-    logger.info("Cross-fitting SurvivalBoost model...")
-    cif_1, cif_0, surv_1, surv_0, cens_surv_1, cens_surv_0, times, eval_metrics_dict = (
-        tune_and_predict(
+    if not cfg.fit.run_evalues_benchmark:
+        # cross fitting of SurvivalBoost model with hyperparameter tuning
+        logger.info("Cross-fitting SurvivalBoost model...")
+        (
+            cif_1,
+            cif_0,
+            surv_1,
+            surv_0,
+            cens_surv_1,
+            cens_surv_0,
+            times,
+            eval_metrics_dict,
+        ) = tune_and_predict(
             X_all=df.drop(columns=["event_indicator", "event_time"]),
             y_all=df[["event_indicator", "event_time"]].rename(
                 columns={"event_indicator": "event", "event_time": "duration"}
@@ -76,52 +86,74 @@ def main(cfg: RunConfig):
                 cfg.survivalboost_params, resolve=True
             ),
         )
-    )
-    # Save eval_metrics_dict as JSON and plots
-    os.makedirs(f"{cfg.general.output_path}/cv_eval_metrics", exist_ok=True)
-    output_json_path = (
-        f"{cfg.general.output_path}/cv_eval_metrics/nested_cv_eval_metrics.json"
-    )
-    plot_eval_metrics(
-        save_path=f"{cfg.general.output_path}/cv_eval_metrics",
-        metrics_dict=eval_metrics_dict,
-        endpoint_name=cfg.experiment.endpoint,
-    )
-    with open(output_json_path, "w") as json_file:
-        json.dump(eval_metrics_dict, json_file, indent=4)
-
-    # transform CIF to hazards
-    haz_1 = get_hazards_from_cif(cif_1, surv_1)
-    haz_0 = get_hazards_from_cif(cif_0, surv_0)
-
-    # set initial estimates
-    initial_estimates = {
-        0: InitialEstimates(
-            times=times,
-            g_star_obs=1 - df["exposed"].astype(int).values,
-            propensity_scores=None,  # will be estimated by PyTMLE
-            hazards=haz_0,
-            event_free_survival_function=surv_0,
-            censoring_survival_function=cens_surv_0,
-        ),
-        1: InitialEstimates(
-            times=times,
-            g_star_obs=df["exposed"].astype(int).values,
-            propensity_scores=None,  # will be estimated by PyTMLE
-            hazards=haz_1,
-            event_free_survival_function=surv_1,
-            censoring_survival_function=cens_surv_1,
-        ),
-    }
-
-    # map the event times to the time grid used by SurvivalBoost
-    time_grid_indices = (
-        np.searchsorted(
-            np.append(times, [np.max(times) + 1]), df["event_time"], side="right"
+        # Save eval_metrics_dict as JSON and plots
+        os.makedirs(f"{cfg.general.output_path}/cv_eval_metrics", exist_ok=True)
+        output_json_path = (
+            f"{cfg.general.output_path}/cv_eval_metrics/nested_cv_eval_metrics.json"
         )
-        - 1
-    )
-    df["event_time"] = times[time_grid_indices]
+        plot_eval_metrics(
+            save_path=f"{cfg.general.output_path}/cv_eval_metrics",
+            metrics_dict=eval_metrics_dict,
+            endpoint_name=cfg.experiment.endpoint,
+        )
+        with open(output_json_path, "w") as json_file:
+            json.dump(eval_metrics_dict, json_file, indent=4)
+
+        # transform CIF to hazards
+        haz_1 = get_hazards_from_cif(cif_1, surv_1)
+        haz_0 = get_hazards_from_cif(cif_0, surv_0)
+
+        # set initial estimates
+        initial_estimates = {
+            0: InitialEstimates(
+                times=times,
+                g_star_obs=1 - df["exposed"].astype(int).values,
+                propensity_scores=None,  # will be estimated by PyTMLE
+                hazards=haz_0,
+                event_free_survival_function=surv_0,
+                censoring_survival_function=cens_surv_0,
+            ),
+            1: InitialEstimates(
+                times=times,
+                g_star_obs=df["exposed"].astype(int).values,
+                propensity_scores=None,  # will be estimated by PyTMLE
+                hazards=haz_1,
+                event_free_survival_function=surv_1,
+                censoring_survival_function=cens_surv_1,
+            ),
+        }
+
+        # map the event times to the time grid used by SurvivalBoost
+        time_grid_indices = (
+            np.searchsorted(
+                np.append(times, [np.max(times) + 1]), df["event_time"], side="right"
+            )
+            - 1
+        )
+        df["event_time"] = times[time_grid_indices]
+        models = None
+    else:
+        # perform e-value benchmark; in this special case, SurvivalBoost is fitted within PyTMLE on discretized event times
+        assert (
+            not cfg.fit.tune_hyperparameters
+        ), "Hyperparameter tuning is not supported for e-value computation. Set fit.tune_hyperparameters to False."
+        logger.warning(
+            "E-value benchmark does not work with the current release version of PyTMLE, but only with the exp/survivalboost branch."
+        )
+        initial_estimates = None
+        quantile_bins = np.quantile(
+            df["event_time"], np.linspace(0, 1, num=22), method="lower"
+        )
+        # discretize event_time into bins like this is also done in the cross-fitting outside of PyTMLE
+        df["event_time"] = np.digitize(df["event_time"], quantile_bins, right=True) - 1
+        df["event_time"] = df["event_time"].map(
+            lambda x: (
+                quantile_bins[int(x)]
+                if 0 <= x < len(quantile_bins)
+                else quantile_bins[-1]
+            )
+        )
+        models = [SurvivalBoost(**cfg.survivalboost_params)]
 
     # initialize PyTMLE
     target_times = [t for t in cfg.fit.target_times if t <= df["event_time"].max()]
@@ -134,6 +166,7 @@ def main(cfg: RunConfig):
         g_comp=True,
         verbose=3,
         initial_estimates=initial_estimates,  # pass initial estimates directly to the second TMLE stage
+        evalues_benchmark=cfg.fit.run_evalues_benchmark,
     )
 
     # fit TMLE
@@ -146,7 +179,10 @@ def main(cfg: RunConfig):
         HistGradientBoostingClassifier(),
     ]
     tmle.fit(
-        max_updates=cfg.fit.max_updates, propensity_score_models=propensity_score_models
+        max_updates=cfg.fit.max_updates,
+        propensity_score_models=propensity_score_models,
+        models=models,
+        cv_folds=cfg.fit.n_folds_outer,
     )
 
     if cfg.general.pickle_tmle:
