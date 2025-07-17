@@ -136,10 +136,10 @@ def get_diagnosis_information(
     df["num_diagnoses"] = mask_in_history.sum(axis=1)
     diag_dates_array[~mask_before_index] = np.datetime64("1700-01-01")
     # count days since last diagnosis before index
-    df["days_since_last_diagnosis"] = (
-        index_dates_array.astype("datetime64[D]")
-        - diag_dates_array.max(axis=1).astype("datetime64[D]")
-    ).astype(int)
+    # df["days_since_last_diagnosis"] = (
+    #     index_dates_array.astype("datetime64[D]")
+    #     - diag_dates_array.max(axis=1).astype("datetime64[D]")
+    # ).astype(int)
 
     # get boolean variables indicating if specified diagnoses are present before index or not
     for diag, diag_code in diagnoses_wildcards.items():
@@ -346,8 +346,6 @@ def merge_covariates_ukbiobank(
     )
     df_diagnoses_drugs = pd.concat([df_diagnoses, df_drugs], axis=1)
     df = df.merge(df_diagnoses_drugs, how="left", left_index=True, right_index=True)
-    # remove patients without any diagnosis
-    df = df[df["num_diagnoses"] > 0]
 
     # categorical variables should be str
     df[one_hot_encode] = df[one_hot_encode].astype(str).replace({"nan": None})
