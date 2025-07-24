@@ -36,7 +36,6 @@ def main(cfg: RunConfig):
     # load data, drop unnecessary columns and undersample exposure groups if requested
     logger.info("Loading data...")
     df = pd.read_csv(csv_path)
-    df = df.drop(columns=cfg.fit.exclude_columns)
     if cfg.fit.subset_condition is not None:
         # for stratification according to given subset condition
         df = df.query(cfg.fit.subset_condition)
@@ -54,6 +53,7 @@ def main(cfg: RunConfig):
         logger.info(
             f"Using subset of {len(df)} patients with undersampled exposure groups"
         )
+    df = df.drop(columns=cfg.fit.exclude_columns)
 
     if not cfg.fit.run_evalues_benchmark:
         # cross fitting of SurvivalBoost model with hyperparameter tuning

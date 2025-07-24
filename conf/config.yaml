@@ -19,6 +19,7 @@ fit:
   exclude_columns:
     - patient_id
     - index_date
+    - covid_vaccine # has to be excluded because there will be no overlap for pre-pandemic controls
   n_jobs: 8
   n_trials: 100
   n_folds_outer: 5
