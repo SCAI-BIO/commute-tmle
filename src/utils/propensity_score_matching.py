@@ -6,9 +6,12 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.utils.class_weight import compute_sample_weight
 
+import logging
 import os
 from pathlib import Path
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class PsmPyMod(PsmPy):
@@ -106,9 +109,13 @@ def perform_propensity_score_matching(
     psm = PsmPyMod(df, treatment=treatment, indx=indx, exclude=exclude)
 
     # compute propensity scores using logistic regression
+    logger.info("Computing propensity scores using HistGradientBoostingClassifier...")
     psm.hist_gradient_boosting_ps(balance=True, grid_search=grid_search)
 
     # perform the matching
+    logger.info(
+        f"Performing propensity score matching with NearestNeighbors and caliper={caliper}..."
+    )
     psm.knn_matched(caliper=caliper)
 
     if save_plots_to is not None:

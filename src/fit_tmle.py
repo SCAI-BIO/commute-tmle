@@ -12,6 +12,8 @@ from pytmle import PyTMLE, InitialEstimates
 from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 
 from .nested_cv import tune_and_predict
+from .utils.propensity_score_matching import perform_propensity_score_matching
+from .utils.plotting import plot_eval_metrics
 from .utils.utils import parse_path_for_experiment, get_hazards_from_cif
 from .utils.plotting import plot_eval_metrics
 from .utils.propensity_score_matching import perform_propensity_score_matching
@@ -43,6 +45,21 @@ def main(cfg: RunConfig):
         logger.info(
             f"Using subset of {len(df)} patients with condition {cfg.fit.subset_condition}"
         )
+    if cfg.fit.control_pool_subsample_factor is not None and (
+        sum(df["exposed"] == False)
+        > cfg.fit.control_pool_subsample_factor * sum(df["exposed"] == True)
+    ):
+        # in some settings it may be necessary to subsample the control pool because k-NN matching can be very memory intensive
+        exposed_group = df[df["exposed"] == True]
+        control_group = df[df["exposed"] == False]
+        n_controls = int(cfg.fit.control_pool_subsample_factor * len(exposed_group))
+        control_group_subsampled = control_group.sample(
+            n=n_controls, random_state=cfg.general.seed
+        )
+        df = pd.concat([exposed_group, control_group_subsampled], ignore_index=True)
+        logger.info(
+            f"Subsampled control pool to {n_controls} rows; total dataset size is now {len(df)}"
+        )
     if cfg.fit.perform_propensity_score_matching:
         matched_ids = perform_propensity_score_matching(
             df,
@@ -52,6 +69,10 @@ def main(cfg: RunConfig):
             grid_search=cfg.fit.propensity_score_matching_grid_search,
             exclude=cfg.fit.exclude_columns + ["event_time", "event_indicator"],
             save_plots_to=f"{cfg.general.output_path}/plots_propensity_score_matching",
+        )
+        df = df[df["patient_id"].isin(matched_ids)]
+        logger.info(
+            f"Using subset of {len(df)} patients with undersampled exposure groups"
         )
         df = df[df["patient_id"].isin(matched_ids)]
         logger.info(
