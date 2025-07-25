@@ -44,7 +44,7 @@ def main(cfg: RunConfig):
             f"Using subset of {len(df)} patients with condition {cfg.fit.subset_condition}"
         )
     if cfg.fit.perform_propensity_score_matching:
-        df = perform_propensity_score_matching(
+        matched_ids = perform_propensity_score_matching(
             df,
             treatment="exposed",
             indx="patient_id",
@@ -53,6 +53,7 @@ def main(cfg: RunConfig):
             exclude=cfg.fit.exclude_columns + ["event_time", "event_indicator"],
             save_plots_to=f"{cfg.general.output_path}/plots_propensity_score_matching",
         )
+        df = df[df["patient_id"].isin(matched_ids)]
         logger.info(
             f"Using subset of {len(df)} patients after propensity score matching"
         )

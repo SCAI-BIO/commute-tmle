@@ -2,9 +2,9 @@ import pandas as pd
 from psmpy import PsmPy
 from matplotlib import pyplot as plt
 import numpy as np
+from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.utils.class_weight import compute_sample_weight
-from xgboost import XGBClassifier
 
 import os
 from pathlib import Path
@@ -14,13 +14,13 @@ from typing import List, Optional
 class PsmPyMod(PsmPy):
     """Add a version of PsmPy that allows for XGBoost propensity score estimation (which works in the presence of missing values)."""
 
-    def xgboost_ps(
+    def hist_gradient_boosting_ps(
         self,
         balance=False,
         grid_search=False,
         max_depth_suggestions=[3, 4, 5],
         learning_rate_suggestions=[0.01, 0.1, 0.2],
-        n_estimators_suggestions=[50, 100, 200],
+        max_iter_suggestions=[50, 100, 200],
     ):
         if self.treatmentn < self.controln:
             minority, majority = self.treatmentdf, self.controldf
@@ -38,16 +38,12 @@ class PsmPyMod(PsmPy):
         )
         if grid_search:
             # perform a grid search to find a suitable set of hyperparameters
-            cv_model = XGBClassifier(
-                objective="binary:logistic",
-                eval_metric="logloss",
-                nthread=-1,
-            )
+            cv_model = HistGradientBoostingClassifier()
             # Define parameter grid for XGBoost
             xgboost_param_grid = {
                 "max_depth": max_depth_suggestions,
                 "learning_rate": learning_rate_suggestions,
-                "n_estimators": n_estimators_suggestions,
+                "max_iter": max_iter_suggestions,
             }
 
             # Set up grid search
@@ -63,33 +59,23 @@ class PsmPyMod(PsmPy):
             # Fit grid search and initialize model with best parameters
             grid_search.fit(X_train, treatment_train)
             best_params = grid_search.best_params_
-            self.model = XGBClassifier(
+            self.model = HistGradientBoostingClassifier(
                 **best_params,
-                objective="binary:logistic",
-                eval_metric="logloss",
-                nthread=-1,
             )
         else:
-            self.model = XGBClassifier(
+            self.model = HistGradientBoostingClassifier(
                 max_depth=6,
                 learning_rate=0.01,
-                n_estimators=100,
-                colsample_bytree=0.8,
-                objective="binary:logistic",
-                eval_metric="logloss",
-                nthread=-1,
+                max_iter=100,
             )
 
         # fit with sample weights according to treatment frequencies
         self.model.fit(
             X_train,
             treatment_train,
-            eval_set=[(X_val, treatment_val)],
             sample_weight=(
                 compute_sample_weight("balanced", treatment_train) if balance else None
             ),
-            sample_weight_eval_set=[compute_sample_weight("balanced", treatment_val)],
-            verbose=False,
         )
 
         pscore = self.model.predict_proba(df_cleaned)[:, 1]
@@ -114,13 +100,13 @@ def perform_propensity_score_matching(
     caliper: float = 0.2,
     grid_search: bool = False,
     save_plots_to: Optional[str] = None,
-) -> pd.DataFrame:
+) -> pd.Series:
     # initialize PsmPy with the DataFrame and treatment variable
     exclude = [col for col in exclude if col in df.columns and col != indx]
     psm = PsmPyMod(df, treatment=treatment, indx=indx, exclude=exclude)
 
     # compute propensity scores using logistic regression
-    psm.xgboost_ps(balance=True, grid_search=grid_search)
+    psm.hist_gradient_boosting_ps(balance=True, grid_search=grid_search)
 
     # perform the matching
     psm.knn_matched(caliper=caliper)
@@ -145,4 +131,4 @@ def perform_propensity_score_matching(
         finally:
             os.chdir(original_cwd)
 
-    return psm.df_matched
+    return psm.df_matched[indx]
