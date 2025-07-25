@@ -49,7 +49,8 @@ def main(cfg: RunConfig):
             treatment="exposed",
             indx="patient_id",
             caliper=cfg.fit.propensity_score_matching_caliper,
-            exclude=cfg.fit.exclude_columns,
+            grid_search=cfg.fit.propensity_score_matching_grid_search,
+            exclude=cfg.fit.exclude_columns + ["event_time", "event_indicator"],
             save_plots_to=f"{cfg.general.output_path}/plots_propensity_score_matching",
         )
         logger.info(

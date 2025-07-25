@@ -20,6 +20,7 @@ dependencies:
   - colorlog=6.9.0=pyh707e725_1
   - comm=0.2.2=pyhd8ed1ab_1
   - contourpy=1.3.1=py313h33d0bda_0
+  - cuda-version=12.9=h4f385c5_3
   - cycler=0.12.1=pyhd8ed1ab_1
   - cyrus-sasl=2.1.27=h54b06d7_7
   - debugpy=1.8.14=py313h46c70d0_0
@@ -81,6 +82,7 @@ dependencies:
   - libuuid=2.38.1=h0b41bf4_0
   - libwebp-base=1.5.0=h851e524_0
   - libxcb=1.17.0=h8a09558_0
+  - libxgboost=3.0.2=cuda128_hacb7753_0
   - libxml2=2.13.7=h4bc477f_1
   - libxslt=1.1.39=h76b75d6_0
   - libzlib=1.3.1=hb9d3cd8_2
@@ -91,6 +93,7 @@ dependencies:
   - matplotlib-base=3.10.1=py313h129903b_0
   - matplotlib-inline=0.1.7=pyhd8ed1ab_1
   - munkres=1.1.4=pyh9f0ad1d_0
+  - nccl=2.27.7.1=h49b9d9a_0
   - ncurses=6.5=h2d0b736_3
   - nest-asyncio=1.6.0=pyhd8ed1ab_1
   - numpy=2.2.4=py313h17eae1a_0
@@ -116,6 +119,7 @@ dependencies:
   - pthread-stubs=0.4=hb9d3cd8_1002
   - ptyprocess=0.7.0=pyhd8ed1ab_1
   - pure_eval=0.2.3=pyhd8ed1ab_1
+  - py-xgboost=3.0.2=cuda128_pyhee1328b_0
   - pygments=2.19.1=pyhd8ed1ab_0
   - pyparsing=3.2.3=pyhd8ed1ab_1
   - python=3.13.2=hf636f53_101_cp313
@@ -148,6 +152,7 @@ dependencies:
   - tzdata=2025b=h78e105d_0
   - wcwidth=0.2.13=pyhd8ed1ab_1
   - wrapt=1.17.2=py313h536fd9c_0
+  - xgboost=3.0.2=cuda128_pyh68bd8d9_0
   - xorg-libxau=1.0.12=hb9d3cd8_0
   - xorg-libxdmcp=1.1.5=hb9d3cd8_0
   - yaml=0.2.5=h7f98852_2
