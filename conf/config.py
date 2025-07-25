@@ -25,7 +25,8 @@ class General:
 @dataclass
 class Fit:
     exclude_columns: List[str]
-    undersample_exposure_groups: bool
+    perform_propensity_score_matching: bool
+    propensity_score_matching_caliper: float
     subset_condition: Optional[str]
     n_folds_outer: int
     n_folds_inner: int

@@ -14,6 +14,7 @@ from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassif
 from .nested_cv import tune_and_predict
 from .utils.utils import parse_path_for_experiment, get_hazards_from_cif
 from .utils.plotting import plot_eval_metrics
+from .utils.propensity_score_matching import perform_propensity_score_matching
 from conf.config import RunConfig
 
 # Set up logging
@@ -42,18 +43,19 @@ def main(cfg: RunConfig):
         logger.info(
             f"Using subset of {len(df)} patients with condition {cfg.fit.subset_condition}"
         )
-    if cfg.fit.undersample_exposure_groups:
-        lowest_freq = df["exposed"].value_counts().min()
-        df = (
-            df.groupby("exposed")
-            .apply(lambda x: x.sample(lowest_freq), include_groups=False)
-            .reset_index()
-            .drop(columns=["level_1"])
+    if cfg.fit.perform_propensity_score_matching:
+        df = perform_propensity_score_matching(
+            df,
+            treatment="exposed",
+            indx="patient_id",
+            caliper=cfg.fit.propensity_score_matching_caliper,
+            exclude=cfg.fit.exclude_columns,
+            save_plots_to=f"{cfg.general.output_path}/plots_propensity_score_matching",
         )
         logger.info(
-            f"Using subset of {len(df)} patients with undersampled exposure groups"
+            f"Using subset of {len(df)} patients after propensity score matching"
         )
-    df = df.drop(columns=cfg.fit.exclude_columns)
+    df = df.drop(columns=cfg.fit.exclude_columns, errors="ignore")
 
     if not cfg.fit.run_evalues_benchmark:
         # cross fitting of SurvivalBoost model with hyperparameter tuning

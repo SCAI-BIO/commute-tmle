@@ -34,7 +34,8 @@ fit:
     - 500
     - 600
     - 700
-  undersample_exposure_groups: true
+  perform_propensity_score_matching: true
+  propensity_score_matching_caliper: 0.2
   subset_condition: event_time > 30
   optuna_storage: null
   tune_hyperparameters: true
