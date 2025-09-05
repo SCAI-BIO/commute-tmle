@@ -1,0 +1,4 @@
+endpoint: composite
+wave: second_wave
+control_group_design: tested_positive_vs_negative
+subset: null
