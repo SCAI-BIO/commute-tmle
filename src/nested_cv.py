@@ -239,7 +239,7 @@ def tune_and_predict(
             X_test_outer_0, times=times
         )
         cifs_1 = clf.predict_cumulative_incidence(X_test_outer_1, times=times)
-        cifs_0 = clf.predict_cumulative_incidence(X_test_outer_1, times=times)
+        cifs_0 = clf.predict_cumulative_incidence(X_test_outer_0, times=times)
 
         cens_surv_predictions_1[outer_test_idx] = cens_surv_1
         cens_surv_predictions_0[outer_test_idx] = cens_surv_0
