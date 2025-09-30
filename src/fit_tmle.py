@@ -72,10 +72,6 @@ def main(cfg: RunConfig):
         )
         df = df[df["patient_id"].isin(matched_ids)]
         logger.info(
-            f"Using subset of {len(df)} patients with undersampled exposure groups"
-        )
-        df = df[df["patient_id"].isin(matched_ids)]
-        logger.info(
             f"Using subset of {len(df)} patients after propensity score matching"
         )
     df = df.drop(columns=cfg.fit.exclude_columns, errors="ignore")
