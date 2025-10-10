@@ -6,7 +6,10 @@ EXPERIMENTS=$(ls ./conf/experiment/*.yaml | xargs -n1 basename | sed 's/\.yaml$/
 TARGET_TIMES="[100,200,300,400,500,600,700]"
 
 # for stratification
-SUBSET_CONDITION="\"event_time>30\""
+SUBSET_CONDITION="\"(event_time>30)\""
+
+CONTROL_POOL_SUBSAMPLE_FACTOR=2
+PERFORM_PROPENSITY_SCORE_MATCHING=false
 
 # for cross-fitting
 N_FOLDS_OUTER=5
@@ -21,9 +24,9 @@ OPTUNA_STORAGE_PASSWORD="QkSv1SG4sN0FP8d3R3Ju"
 OPTUNA_STORAGE="postgresql://commute:${OPTUNA_STORAGE_PASSWORD}@${OPTUNA_STORAGE_HOST}:${OPTUNA_STORAGE_PORT}/optuna"
 
 # hardware requirements
-N_JOBS=6
-MEM_GB=32
-TIMEOUT_MIN=1440
+N_JOBS=20
+MEM_GB=64
+TIMEOUT_MIN=2880
 # when running on HPC cluster, you may want to add variable for partition
 
 # activate mamba environment
@@ -74,6 +77,8 @@ python3 -m src.fit_tmle --multirun \
  fit.optuna_storage=${OPTUNA_STORAGE} \
  fit.n_folds_outer=${N_FOLDS_OUTER} \
  fit.n_folds_inner=${N_FOLDS_INNER} \
+ fit.perform_propensity_score_matching=${PERFORM_PROPENSITY_SCORE_MATCHING} \
+ fit.control_pool_subsample_factor=${CONTROL_POOL_SUBSAMPLE_FACTOR} \
  hydra.launcher.cpus_per_task=${N_JOBS} \
  hydra.launcher.timeout_min=${TIMEOUT_MIN} \
  hydra.launcher.mem_gb=${MEM_GB} \

@@ -1,3 +1,4 @@
+from lifelines import AalenJohansenFitter
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
@@ -162,3 +163,33 @@ def plot_eval_metrics(save_path: str, metrics_dict: Dict, endpoint_name: str = "
         ax.set_ylabel("AUC(t)")
         plt.savefig(f"{save_path}/auc_t.svg")
         plt.close()
+
+def plot_aalen_johansen(save_path: str,
+                        T: pd.Series, 
+                        E: pd.Series, 
+                        exposed: pd.Series,
+                        event_of_interest: int = 1):
+    sns.set_style("white")
+
+    T_1 = T[exposed]
+    E_1 = E[exposed]
+    T_0 = T[~exposed]
+    E_0 = E[~exposed]
+
+    ajf_1 = AalenJohansenFitter(calculate_variance=True)
+    ajf_1 = ajf_1.fit(T_1, E_1, event_of_interest=event_of_interest)
+    ajf_1.plot(color="#c00000", 
+                label="Everyone infected",
+                xlabel="Days since index", 
+                ylabel="Counterfactual cumulative incidence",
+                title="Aalen-Johansen estimates")
+
+    ajf_0 = AalenJohansenFitter(calculate_variance=True)
+    ajf_0 = ajf_0.fit(T_0, E_0, event_of_interest=event_of_interest)
+    ajf_0.plot(color="#699aaf", 
+                label="No one infected",
+                xlabel="Days since index", 
+                ylabel="Counterfactual cumulative incidence",
+                title="Aalen-Johansen estimates")
+
+    plt.savefig(f"{save_path}/aalen_johansen.svg", bbox_inches='tight')

@@ -15,8 +15,7 @@ from .nested_cv import tune_and_predict
 from .utils.propensity_score_matching import perform_propensity_score_matching
 from .utils.plotting import plot_eval_metrics
 from .utils.utils import parse_path_for_experiment, get_hazards_from_cif
-from .utils.plotting import plot_eval_metrics
-from .utils.propensity_score_matching import perform_propensity_score_matching
+from .utils.plotting import plot_eval_metrics, plot_aalen_johansen
 from conf.config import RunConfig
 
 # Set up logging
@@ -75,6 +74,12 @@ def main(cfg: RunConfig):
             f"Using subset of {len(df)} patients after propensity score matching"
         )
     df = df.drop(columns=cfg.fit.exclude_columns, errors="ignore")
+
+    # plot Aalen-Johansen curves
+    plot_aalen_johansen(save_path=cfg.general.output_path,
+                        T=df["event_time"],
+                        E=df["event_indicator"],
+                        exposed=df["exposed"])
 
     if not cfg.fit.run_evalues_benchmark:
         # cross fitting of SurvivalBoost model with hyperparameter tuning
