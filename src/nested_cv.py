@@ -93,10 +93,6 @@ def tune_and_predict(
     given_hyperparameters: Optional[dict] = None,
 ):
     if skip_tuning:
-        if given_hyperparameters is None:
-            raise ValueError(
-                "If skip_tuning is True, given_hyperparameters must be provided."
-            )
         logger.info(
             "Running nested cross validation for SurvivalBoost with given hyperparameters"
         )
@@ -131,17 +127,31 @@ def tune_and_predict(
         X_test_outer = X_all.iloc[outer_test_idx, :]
         y_test_outer = y_all.iloc[outer_test_idx, :]
 
+        if experiment_prefix is None:
+                study_name = f"SurvivalBoost fold_{i+1}"
+        else:
+            study_name = f"{experiment_prefix}_fold_{i+1}"
+
         if skip_tuning:
-            best_param = given_hyperparameters
+            try:
+                study = optuna.load_study(
+                        study_name=study_name,
+                        storage=optuna_storage,
+                    )
+                best_param = study.best_params
+                logger.info(
+                    f"Loaded previous study for fold {i+1}/{n_folds_outer}, using best hyperparameters from there."
+                )
+            except:
+                logger.warning(
+                    "Could not load previous study, using default hyperparameters instead."
+                )
+                best_param = given_hyperparameters
         else:
             # ensure that the outer test set is not empty
             logger.info(
                 f"Begin hyperparameter optimization for fold {i+1}/{n_folds_outer}"
             )
-            if experiment_prefix is None:
-                study_name = f"SurvivalBoost fold_{i+1}"
-            else:
-                study_name = f"{experiment_prefix}_fold_{i+1}"
             if optuna_storage is None:
                 # if no storage is provided, use SQLite
                 storage = optuna.storages.RDBStorage(

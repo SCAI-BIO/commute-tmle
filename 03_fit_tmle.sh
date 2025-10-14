@@ -12,6 +12,7 @@ CONTROL_POOL_SUBSAMPLE_FACTOR=3
 PERFORM_PROPENSITY_SCORE_MATCHING=true
 
 # for cross-fitting
+TUNE_HYPERPARAMETERS=true
 N_FOLDS_OUTER=5
 N_FOLDS_INNER=3
 
@@ -79,6 +80,7 @@ python3 -m src.fit_tmle --multirun \
  fit.n_folds_inner=${N_FOLDS_INNER} \
  fit.perform_propensity_score_matching=${PERFORM_PROPENSITY_SCORE_MATCHING} \
  fit.control_pool_subsample_factor=${CONTROL_POOL_SUBSAMPLE_FACTOR} \
+ fit.tune_hyperparameters=${TUNE_HYPERPARAMETERS} \
  hydra.launcher.cpus_per_task=${N_JOBS} \
  hydra.launcher.timeout_min=${TIMEOUT_MIN} \
  hydra.launcher.mem_gb=${MEM_GB} \
