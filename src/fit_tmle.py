@@ -66,6 +66,7 @@ def main(cfg: RunConfig):
             indx="patient_id",
             caliper=cfg.fit.propensity_score_matching_caliper,
             grid_search=cfg.fit.propensity_score_matching_grid_search,
+            calibrate_propensities=cfg.fit.propensity_score_matching_calibrate,
             exclude=cfg.fit.exclude_columns + ["event_time", "event_indicator"],
             save_plots_to=f"{cfg.general.output_path}/plots_propensity_score_matching",
         )
@@ -76,10 +77,12 @@ def main(cfg: RunConfig):
     df = df.drop(columns=cfg.fit.exclude_columns, errors="ignore")
 
     # plot Aalen-Johansen curves
-    plot_aalen_johansen(save_path=cfg.general.output_path,
-                        T=df["event_time"],
-                        E=df["event_indicator"],
-                        exposed=df["exposed"])
+    plot_aalen_johansen(
+        save_path=cfg.general.output_path,
+        T=df["event_time"],
+        E=df["event_indicator"],
+        exposed=df["exposed"],
+    )
 
     if not cfg.fit.run_evalues_benchmark:
         # cross fitting of SurvivalBoost model with hyperparameter tuning
