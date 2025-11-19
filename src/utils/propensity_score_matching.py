@@ -86,35 +86,22 @@ class PsmPyMod(PsmPy):
 
         pscore = self.model.predict_proba(df_cleaned)[:, 1]
 
-        if calibrate_propensities:
-            # isotonic calibration
-            clf_isotonic = CalibratedClassifierCV(self.model, cv=5, method="isotonic")
-            clf_isotonic.fit(
-                X_train,
-                treatment_train,
-                sample_weight=(
-                    compute_sample_weight("balanced", treatment_train)
-                    if balance
-                    else None
-                ),
-            )
-            pscore_isotonic = clf_isotonic.predict_proba(df_cleaned)[:, 1]
+        # isotonic calibration
+        clf_isotonic = CalibratedClassifierCV(self.model, cv=5, method="isotonic")
+        clf_isotonic.fit(
+            X_train,
+            treatment_train,
+        )
+        pscore_isotonic = clf_isotonic.predict_proba(df_cleaned)[:, 1]
 
-            # sigmoid calibration
-            clf_sigmoid = CalibratedClassifierCV(self.model, cv=5, method="sigmoid")
-            clf_sigmoid.fit(
-                X_train,
-                treatment_train,
-                sample_weight=(
-                    compute_sample_weight("balanced", treatment_train)
-                    if balance
-                    else None
-                ),
-            )
-            pscore_sigmoid = clf_sigmoid.predict_proba(df_cleaned)[:, 1]
-        else:
-            pscore_isotonic = [np.nan] * len(pscore)
-            pscore_sigmoid = [np.nan] * len(pscore)
+        # sigmoid calibration
+        clf_sigmoid = CalibratedClassifierCV(self.model, cv=5, method="sigmoid")
+        clf_sigmoid.fit(
+            X_train,
+            treatment_train,
+        )
+        pscore_sigmoid = clf_sigmoid.predict_proba(df_cleaned)[:, 1]
+
         df_cleaned["propensity_score_uncalibrated"] = pscore
         df_cleaned["propensity_score_isotonic"] = pscore_isotonic
         df_cleaned["propensity_score_sigmoid"] = pscore_sigmoid
@@ -168,6 +155,11 @@ class PsmPyMod(PsmPy):
         elif best_method == "sigmoid":
             self.predicted_data["propensity_score"] = data["propensity_score_sigmoid"]
 
+        # Clip propensity scores to avoid zeros
+        self.predicted_data["propensity_score"] = np.clip(
+            self.predicted_data["propensity_score"], 1e-6, 1.0 - 1e-6
+        )
+
     def plot_propensity_calibration(
         self,
         title: str = "Predicted probabilities",
@@ -188,26 +180,6 @@ class PsmPyMod(PsmPy):
             label="No calibration (%1.3f)" % brier_score_uncalibrated,
         )
 
-        prob_pos_isotonic = data["propensity_score_isotonic"]
-        brier_score_isotonic = brier_score_loss(data[self.treatment], prob_pos_isotonic)
-        plt.plot(
-            np.arange(len(order)),
-            prob_pos_isotonic[order],
-            "g",
-            label="Isotonic calibration (%1.3f)" % brier_score_isotonic,
-            alpha=0.6,
-        )
-
-        prob_pos_sigmoid = data["propensity_score_sigmoid"]
-        brier_score_sigmoid = brier_score_loss(data[self.treatment], prob_pos_sigmoid)
-        plt.plot(
-            np.arange(len(order)),
-            prob_pos_sigmoid[order],
-            "b",
-            label="Sigmoid calibration (%1.3f)" % brier_score_sigmoid,
-            alpha=0.6,
-        )
-
         # empirical treatment assignement rate
         plt.plot(
             np.arange(len(order)),
@@ -216,6 +188,29 @@ class PsmPyMod(PsmPy):
             linewidth=3,
             label=r"Empirical",
         )
+
+        # isotonic-calibrated propensity scores
+        prob_pos_isotonic = data["propensity_score_isotonic"]
+        brier_score_isotonic = brier_score_loss(data[self.treatment], prob_pos_isotonic)
+        plt.plot(
+            np.arange(len(order)),
+            prob_pos_isotonic[order],
+            "g",
+            label="Isotonic calibration (%1.3f)" % brier_score_isotonic,
+            alpha=0.4,
+        )
+
+        # sigmoid-calibrated propensity scores
+        prob_pos_sigmoid = data["propensity_score_sigmoid"]
+        brier_score_sigmoid = brier_score_loss(data[self.treatment], prob_pos_sigmoid)
+        plt.plot(
+            np.arange(len(order)),
+            prob_pos_sigmoid[order],
+            "b",
+            label="Sigmoid calibration (%1.3f)" % brier_score_sigmoid,
+            alpha=0.4,
+        )
+
         plt.title(title)
         plt.xlabel("Instances sorted according to predicted probability (uncalibrated)")
         plt.ylabel("P(y=1)")
@@ -269,9 +264,9 @@ def perform_propensity_score_matching(
                 save=True,
             )
             plt.close()
-            if calibrate_propensities:
-                psm.plot_propensity_calibration(save=True)
-                plt.close()
+
+            psm.plot_propensity_calibration(save=True)
+            plt.close()
         finally:
             os.chdir(original_cwd)
 

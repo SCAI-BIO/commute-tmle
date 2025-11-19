@@ -37,7 +37,8 @@ fit:
   perform_propensity_score_matching: true
   propensity_score_matching_caliper: 0.2
   propensity_score_matching_grid_search: true
-  propensity_score_matching_calibrate: false
+  propensity_score_matching_calibrate: true # for propensity scores in PSM
+  propensity_score_calibration_method: null # for propensity scores in PyTMLE
   control_pool_subsample_factor: null
   subset_condition: event_time > 30
   optuna_storage: null

@@ -208,6 +208,7 @@ def main(cfg: RunConfig):
     tmle.fit(
         max_updates=cfg.fit.max_updates,
         propensity_score_models=propensity_score_models,
+        propensity_score_calibration_method=cfg.fit.propensity_score_calibration_method,
         models=models,
         cv_folds=cfg.fit.n_folds_outer,
     )
@@ -248,6 +249,8 @@ def main(cfg: RunConfig):
         color_1="#c00000",
         color_0="#699aaf",
     )
+
+    tmle.plot_propensity_score_calibration(save_dir_path=cfg.general.output_path)
 
 
 if __name__ == "__main__":

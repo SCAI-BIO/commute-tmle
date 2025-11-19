@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 """
 Data classes for typing. 
@@ -29,6 +29,7 @@ class Fit:
     propensity_score_matching_caliper: float
     propensity_score_matching_grid_search: bool
     propensity_score_matching_calibrate: bool
+    propensity_score_calibration_method: Optional[Literal["isotonic", "sigmoid"]]
     control_pool_subsample_factor: Optional[float]
     subset_condition: Optional[str]
     n_folds_outer: int
