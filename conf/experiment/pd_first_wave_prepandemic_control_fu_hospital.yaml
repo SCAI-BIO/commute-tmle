@@ -1,0 +1,4 @@
+endpoint: pd
+wave: first_wave
+control_group_design: prepandemic_control_fu
+subset: hospital
