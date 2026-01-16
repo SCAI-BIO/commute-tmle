@@ -12,6 +12,7 @@ from pytmle import PyTMLE, InitialEstimates
 from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 
 from .nested_cv import tune_and_predict
+from .hte_exploration import explore_effect_heterogeneity
 from .utils.propensity_score_matching import perform_propensity_score_matching
 from .utils.plotting import plot_eval_metrics
 from .utils.utils import parse_path_for_experiment, get_hazards_from_cif
@@ -74,7 +75,8 @@ def main(cfg: RunConfig):
         logger.info(
             f"Using subset of {len(df)} patients after propensity score matching"
         )
-    df = df.drop(columns=cfg.fit.exclude_columns, errors="ignore")
+    df_full = df.copy() # for later use
+    df = df.drop(columns=cfg.fit.exclude_columns)
 
     # plot Aalen-Johansen curves
     plot_aalen_johansen(
@@ -251,6 +253,14 @@ def main(cfg: RunConfig):
     )
 
     tmle.plot_propensity_score_calibration(save_dir_path=cfg.general.output_path)
+
+    # explore effect heterogeneity if requested
+    if cfg.fit.explore_effect_heterogeneity:
+        logger.info("Exploring effect heterogeneity...")
+        explore_effect_heterogeneity(fitted_tmle=tmle,
+                                     input_df=df_full.drop(columns=["exposed", "event_time", "event_indicator", "patient_id"]),
+                                     save_dir_path=f"{cfg.general.output_path}/plots_hte_exploration",
+                                     quantile=cfg.fit.hte_quantile)
 
 
 if __name__ == "__main__":

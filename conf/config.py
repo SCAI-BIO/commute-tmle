@@ -41,6 +41,8 @@ class Fit:
     max_updates: int
     optuna_storage: Optional[str]
     tune_hyperparameters: bool
+    explore_effect_heterogeneity: bool
+    hte_quantile: float
     run_evalues_benchmark: bool
 
 
