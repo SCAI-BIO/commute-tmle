@@ -335,9 +335,22 @@ def plot_quantile_distributions_binary(input_df: pd.DataFrame,
         axes[i].set_ylabel("%")
         axes[i].set_title(f)
 
-        contingency = np.array([frequencies.values, len(df) - frequencies.values])
-        _, p, _, _ = chi2_contingency(contingency)
-        annotate_brackets(0, 1, p, np.arange(len(heights)), heights, ax=axes[i], dh=5, barh=2, maxasterix=3)
+        try:
+            contingency = np.array([frequencies.values, len(df) - frequencies.values])
+            _, p, _, _ = chi2_contingency(contingency)
+            annotate_brackets(
+                0,
+                1,
+                p,
+                np.arange(len(heights)),
+                heights,
+                ax=axes[i],
+                dh=5,
+                barh=2,
+                maxasterix=3,
+            )
+        except ValueError:
+            continue
 
     if target_time is not None:
         plt.savefig(f"{save_path}/distributions_binary_features_{target_time}.svg", bbox_inches='tight')
