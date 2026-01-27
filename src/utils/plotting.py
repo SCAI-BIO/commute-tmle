@@ -328,7 +328,7 @@ def plot_quantile_distributions_binary(input_df: pd.DataFrame,
 
     for i, f in enumerate(binary_features):
         frequencies = df.groupby(["quantile"])[f].sum()
-        heights = list(frequencies / len(df) * 100)
+        heights = list(frequencies / df.groupby(["quantile"])[f].count() * 100)
         axes[i].bar(x=[f"bottom {quantile*100}%", f"top {quantile*100}%"], height=heights, color=[palette[f"bottom {quantile*100}%"], palette[f"top {quantile*100}%"]])
         axes[i].set_ylim([0,100])
         axes[i].set_xlabel("")
