@@ -1,0 +1,27 @@
+[project]
+name = "src"
+version = "0.1.0.dev"
+description = "Add wheel file based on src"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "hazardous>=0.1.0",
+    "hydra-core>=1.3.2",
+    "hydra-submitit-launcher==1.2.0",
+    "submitit==1.3.3",
+    "optuna>=4.3.0",
+    "pandas<2.0.0",
+    "pytmle (>=0.4.1)",
+    "mlflow (>=3.1.0,<4.0.0)",
+    "typing-extensions (==4.11.0)",
+    "scipy (<1.14)",
+    "psmpy (==0.3.14)",
+    "ptitprince (==0.2.7)",
+    "matplotlib (<3.8)"
+]
+
+[tool.poetry.scripts]
+set_dates = "src.set_dates:main"
+merge_covariates = "src.merge_covariates:main"
+fit_tmle = "src.fit_tmle:main"
+
