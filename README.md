@@ -1,3 +1,6 @@
+# Is COVID-19 increasing the risk for neurodegeneration? A causal inference study on three real-world population cohorts
+Code accompanying a research article by Jannis Guski, Sofie Theisen Honoré, Guillaume Azarias, Steven Sison, Søren Brunak, and Holger Fröhlich. If you have any questions regarding the code or paper, please feel free to get in touch (jannis.guski@scai.fraunhofer.de).
+
 ## Objective
 This is a pipeline to estimate the average exposure effects of SARS-CoV-2 infections (operationalized by either a positive test result or a documented diagnosis U07.1) on the risk of receiving a diagnosis of Alzheimer’s Disease (AD, G30.*), Parkinson’s Disease (PD, G20), or unspecified dementia (F03.*) in the years after in a whole cohort or strata of a cohort. Our own implementation of Targeted Maximum Likelihood Estimation (TMLE) from the `PyTMLE` package is used to get doubly robust estimates with a flexible integration of models for nuisance functions. 
 
