@@ -166,11 +166,15 @@ def plot_eval_metrics(save_path: str, metrics_dict: Dict, endpoint_name: str = "
         plt.savefig(f"{save_path}/auc_t.svg")
         plt.close()
 
-def plot_aalen_johansen(save_path: str,
-                        T: pd.Series, 
-                        E: pd.Series, 
-                        exposed: pd.Series,
-                        event_of_interest: int = 1):
+
+def plot_aalen_johansen(
+    save_path: str,
+    T: pd.Series,
+    E: pd.Series,
+    exposed: pd.Series,
+    event_of_interest: int = 1,
+    target_times: Optional[List[float]] = None,
+) -> Dict[str, pd.DataFrame]:
     sns.set_style("white")
 
     T_1 = T[exposed]
@@ -180,46 +184,156 @@ def plot_aalen_johansen(save_path: str,
 
     ajf_1 = AalenJohansenFitter(calculate_variance=True)
     ajf_1 = ajf_1.fit(T_1, E_1, event_of_interest=event_of_interest)
-    ajf_1.plot(color="#c00000", 
-                label="Everyone infected",
-                xlabel="Days since index", 
-                ylabel="Counterfactual cumulative incidence",
-                title="Aalen-Johansen estimates")
+    ajf_1.plot(
+        color="#c00000",
+        label="Everyone infected",
+        xlabel="Days since index",
+        ylabel="Counterfactual cumulative incidence",
+        title="Aalen-Johansen estimates",
+    )
 
     ajf_0 = AalenJohansenFitter(calculate_variance=True)
     ajf_0 = ajf_0.fit(T_0, E_0, event_of_interest=event_of_interest)
-    ajf_0.plot(color="#699aaf", 
-                label="No one infected",
-                xlabel="Days since index", 
-                ylabel="Counterfactual cumulative incidence",
-                title="Aalen-Johansen estimates")
+    ajf_0.plot(
+        color="#699aaf",
+        label="No one infected",
+        xlabel="Days since index",
+        ylabel="Counterfactual cumulative incidence",
+        title="Aalen-Johansen estimates",
+    )
 
-    plt.savefig(f"{save_path}/aalen_johansen.svg", bbox_inches='tight')
+    plt.savefig(f"{save_path}/aalen_johansen.svg", bbox_inches="tight")
 
-def plot_hte_distribution(save_path: str,
-                          hte_df: pd.DataFrame,
-                          quantile: float,
-                          target_time: Optional[float] = None):
+    if target_times is not None:
+        idx_1 = np.searchsorted(ajf_1.timeline, target_times, side="right")
+        idx_0 = np.searchsorted(ajf_0.timeline, target_times, side="right")
+
+        pt_est_1 = ajf_1.cumulative_density_.iloc[idx_1]
+        pt_est_0 = ajf_0.cumulative_density_.iloc[idx_0]
+        se_1 = np.sqrt(ajf_1.variance_.iloc[idx_1])
+        se_0 = np.sqrt(ajf_0.variance_.iloc[idx_0])
+        ci_1 = ajf_1.confidence_interval_.iloc[idx_1]
+        ci_0 = ajf_0.confidence_interval_.iloc[idx_0]
+
+        df_1 = pd.concat([pt_est_1, se_1, ci_1], axis=1).rename(
+            columns={
+                f"CIF_{event_of_interest}": "Pt Est",
+                "variance": "SE",
+                "AJ_estimate_lower_0.95": "CI_lower",
+                "AJ_estimate_upper_0.95": "CI_upper",
+            }
+        )
+        df_1["Event"] = event_of_interest
+        df_1["Time"] = target_times
+        df_1["Group"] = 1
+        df_0 = pd.concat([pt_est_0, se_0, ci_0], axis=1).rename(
+            columns={
+                f"CIF_{event_of_interest}": "Pt Est",
+                "variance": "SE",
+                "AJ_estimate_lower_0.95": "CI_lower",
+                "AJ_estimate_upper_0.95": "CI_upper",
+            }
+        )
+        df_0["Event"] = event_of_interest
+        df_0["Time"] = target_times
+        df_0["Group"] = 0
+
+        est_aj = {}
+        est_aj["risks"] = pd.concat(
+            [
+                df_1[
+                    ["Event", "Time", "Pt Est", "SE", "Group", "CI_lower", "CI_upper"]
+                ],
+                df_0[
+                    ["Event", "Time", "Pt Est", "SE", "Group", "CI_lower", "CI_upper"]
+                ],
+            ]
+        )
+
+        cif_1 = pt_est_1.to_numpy().squeeze()
+        cif_0 = pt_est_0.to_numpy().squeeze()
+        rd = cif_1 - cif_0
+        var_se_0 = se_0.to_numpy() ** 2
+        var_se_1 = se_1.to_numpy() ** 2
+        se_rd = np.sqrt(var_se_0 + var_se_1)
+        est_aj["rd"] = pd.DataFrame(
+            {
+                "Event": [event_of_interest] * len(target_times),
+                "Time": target_times,
+                "Pt Est": rd,
+                "SE": se_rd,
+                "CI_lower": rd - 1.96 * se_rd,
+                "CI_upper": rd + 1.96 * se_rd,
+            }
+        )
+
+        # RR with confidence intervals using Fieller ratio
+        rr = cif_1 / cif_0
+        g = (1.96**2) * var_se_0 / cif_0**2
+        C = np.sqrt(var_se_1 + rr**2 * var_se_0 - g * var_se_1)
+
+        est_aj["rr"] = pd.DataFrame(
+            {
+                "Event": [event_of_interest] * len(target_times),
+                "Time": target_times,
+                "Pt Est": rr,
+                "CI_lower": (1 / (1 - g)) * (rr - 1.96 / cif_0 * C),
+                "CI_upper": (1 / (1 - g)) * (rr + 1.96 / cif_0 * C),
+            }
+        )
+    return est_aj
+
+
+def plot_hte_distribution(
+    save_path: str,
+    hte_df: pd.DataFrame,
+    quantile: float,
+    target_time: Optional[float] = None,
+):
     sns.set_style("white")
-    plt.figure(figsize=(6,4))
+    plt.figure(figsize=(6, 4))
 
     # colors for the quantiles
-    palette = {f'bottom {quantile*100}%': '#984ea3', f'middle {100 - 2*quantile*100}%': '#9e9e9e', f'top {quantile*100}%': '#e69f00'}
+    palette = {
+        f"bottom {quantile*100}%": "#984ea3",
+        f"middle {100 - 2*quantile*100}%": "#9e9e9e",
+        f"top {quantile*100}%": "#e69f00",
+    }
 
-    ax = pt.RainCloud(x='group', y='hte', data=hte_df, hue='quantile',
-                    palette=palette, bw=0.25, width_viol=0.5)
+    ax = pt.RainCloud(
+        x="group",
+        y="hte",
+        data=hte_df,
+        hue="quantile",
+        palette=palette,
+        bw=0.25,
+        width_viol=0.5,
+    )
     ax.get_xaxis().set_ticks([])
     ax.set_xlabel("")
     ax.set_ylabel("HTE Estimate")
 
     if target_time is not None:
-        plt.savefig(f"{save_path}/hte_{target_time}.svg", bbox_inches='tight')
+        plt.savefig(f"{save_path}/hte_{target_time}.svg", bbox_inches="tight")
     else:
-        plt.savefig(f"{save_path}/hte.svg", bbox_inches='tight')
+        plt.savefig(f"{save_path}/hte.svg", bbox_inches="tight")
     plt.close()
 
-def annotate_brackets(num1, num2, data, center, height, ax, yerr=None, dh=.05, barh=.05, fs=None, maxasterix=None):
-    """ 
+
+def annotate_brackets(
+    num1,
+    num2,
+    data,
+    center,
+    height,
+    ax,
+    yerr=None,
+    dh=0.05,
+    barh=0.05,
+    fs=None,
+    maxasterix=None,
+):
+    """
     Annotate plot with p-values.
 
     :param num1: number of left bar to put bracket over
@@ -242,18 +356,18 @@ def annotate_brackets(num1, num2, data, center, height, ax, yerr=None, dh=.05, b
         # ** is p < 0.005
         # *** is p < 0.0005
         # etc.
-        text = ''
-        p = .05
+        text = ""
+        p = 0.05
 
         while data < p:
-            text += '*'
-            p /= 10.
+            text += "*"
+            p /= 10.0
 
             if maxasterix and len(text) == maxasterix:
                 break
 
         if len(text) == 0:
-            text = 'n. s.'
+            text = "n. s."
 
     lx, ly = center[num1], height[num1]
     rx, ry = center[num2], height[num2]
@@ -265,72 +379,128 @@ def annotate_brackets(num1, num2, data, center, height, ax, yerr=None, dh=.05, b
     y = max(ly, ry) + dh
 
     barx = [lx, lx, rx, rx]
-    bary = [y, y+barh, y+barh, y]
-    mid = ((lx+rx)/2, y+barh)
+    bary = [y, y + barh, y + barh, y]
+    mid = ((lx + rx) / 2, y + barh)
 
-    ax.plot(barx, bary, c='black')
+    ax.plot(barx, bary, c="black")
 
-    kwargs = dict(ha='center', va='bottom')
+    kwargs = dict(ha="center", va="bottom")
     if fs is not None:
-        kwargs['fontsize'] = fs
+        kwargs["fontsize"] = fs
 
     ax.text(*mid, text, **kwargs)
 
-def plot_quantile_distributions_continuous(input_df: pd.DataFrame, 
-                                           hte_df: pd.DataFrame, 
-                                           quantile: float,
-                                           continuous_features: List[str],
-                                           save_path: str,
-                                           target_time: Optional[float] = None):
-    df = pd.concat([input_df, hte_df], axis=1)
-    df["quantile"] = df["quantile"].cat.remove_categories([f'middle {100 - 2*quantile*100}%'])
-    df = df[(df["quantile"].str.startswith("top")) | (df["quantile"].str.startswith("bottom"))]
 
-    palette = {f'bottom {quantile*100}%': '#984ea3', f'middle {100 - 2*quantile*100}%': '#9e9e9e', f'top {quantile*100}%': '#e69f00'}
+def plot_quantile_distributions_continuous(
+    input_df: pd.DataFrame,
+    hte_df: pd.DataFrame,
+    quantile: float,
+    continuous_features: List[str],
+    save_path: str,
+    target_time: Optional[float] = None,
+):
+    df = pd.concat([input_df, hte_df], axis=1)
+    df["quantile"] = df["quantile"].cat.remove_categories(
+        [f"middle {100 - 2*quantile*100}%"]
+    )
+    df = df[
+        (df["quantile"].str.startswith("top"))
+        | (df["quantile"].str.startswith("bottom"))
+    ]
+
+    palette = {
+        f"bottom {quantile*100}%": "#984ea3",
+        f"middle {100 - 2*quantile*100}%": "#9e9e9e",
+        f"top {quantile*100}%": "#e69f00",
+    }
 
     sns.set_style(style="white")
-    fig, axes = plt.subplots(ncols=len(continuous_features), figsize=(4*len(continuous_features), 4))
+    fig, axes = plt.subplots(
+        ncols=len(continuous_features), figsize=(4 * len(continuous_features), 4)
+    )
     axes = axes.flatten()
     for i, f in enumerate(continuous_features):
-        pt.RainCloud(x="quantile", y=f, data=df,
-                        palette=palette, bw=0.25, width_viol=0.5, ax=axes[i])
+        pt.RainCloud(
+            x="quantile",
+            y=f,
+            data=df,
+            palette=palette,
+            bw=0.25,
+            width_viol=0.5,
+            ax=axes[i],
+        )
         axes[i].set_xlabel("")
         axes[i].set_ylabel("")
         axes[i].set_title(f)
-        heights = [df[df["quantile"] == f"bottom {quantile*100}%"][f].max(),
-                    df[df["quantile"] == f"top {quantile*100}%"][f].max()]
+        heights = [
+            df[df["quantile"] == f"bottom {quantile*100}%"][f].max(),
+            df[df["quantile"] == f"top {quantile*100}%"][f].max(),
+        ]
 
         bottom = df[df["quantile"] == f"bottom {quantile*100}%"][f]
         top = df[df["quantile"] == f"top {quantile*100}%"][f]
-        _, p = ttest_ind(bottom, top, nan_policy='omit')
-        annotate_brackets(0, 1, p, np.arange(2), heights, ax=axes[i], dh=max(heights)*0.02, barh=max(heights)*0.01, maxasterix=3)
+        _, p = ttest_ind(bottom, top, nan_policy="omit")
+        annotate_brackets(
+            0,
+            1,
+            p,
+            np.arange(2),
+            heights,
+            ax=axes[i],
+            dh=max(heights) * 0.02,
+            barh=max(heights) * 0.01,
+            maxasterix=3,
+        )
     if target_time is not None:
-        plt.savefig(f"{save_path}/distributions_continuous_features_{target_time}.svg", bbox_inches='tight')
+        plt.savefig(
+            f"{save_path}/distributions_continuous_features_{target_time}.svg",
+            bbox_inches="tight",
+        )
     else:
-        plt.savefig(f"{save_path}/distributions_continuous_features.svg", bbox_inches='tight')
+        plt.savefig(
+            f"{save_path}/distributions_continuous_features.svg", bbox_inches="tight"
+        )
     plt.close()
 
-def plot_quantile_distributions_binary(input_df: pd.DataFrame, 
-                                           hte_df: pd.DataFrame, 
-                                           quantile: float,
-                                           binary_features: List[str],
-                                           save_path: str,
-                                           target_time: Optional[float] = None):
-    df = pd.concat([input_df, hte_df], axis=1)
-    df["quantile"] = df["quantile"].cat.remove_categories([f'middle {100 - 2*quantile*100}%'])
-    df = df[(df["quantile"].str.startswith("top")) | (df["quantile"].str.startswith("bottom"))]
 
-    palette = {f'bottom {quantile*100}%': '#984ea3', f'middle {100 - 2*quantile*100}%': '#9e9e9e', f'top {quantile*100}%': '#e69f00'}
+def plot_quantile_distributions_binary(
+    input_df: pd.DataFrame,
+    hte_df: pd.DataFrame,
+    quantile: float,
+    binary_features: List[str],
+    save_path: str,
+    target_time: Optional[float] = None,
+):
+    df = pd.concat([input_df, hte_df], axis=1)
+    df["quantile"] = df["quantile"].cat.remove_categories(
+        [f"middle {100 - 2*quantile*100}%"]
+    )
+    df = df[
+        (df["quantile"].str.startswith("top"))
+        | (df["quantile"].str.startswith("bottom"))
+    ]
+
+    palette = {
+        f"bottom {quantile*100}%": "#984ea3",
+        f"middle {100 - 2*quantile*100}%": "#9e9e9e",
+        f"top {quantile*100}%": "#e69f00",
+    }
 
     sns.set_style(style="white")
-    fig, axes = plt.subplots(ncols=len(binary_features), figsize=(4*len(binary_features), 4))
+    fig, axes = plt.subplots(
+        ncols=len(binary_features), figsize=(4 * len(binary_features), 4)
+    )
     axes = axes.flatten()
 
     for i, f in enumerate(binary_features):
         frequencies = df.groupby(["quantile"])[f].sum()
         heights = list(frequencies / df.groupby(["quantile"])[f].count() * 100)
-        axes[i].bar(x=[f"bottom {quantile*100}%", f"top {quantile*100}%"], height=heights, color=[palette[f"bottom {quantile*100}%"], palette[f"top {quantile*100}%"]])
-        axes[i].set_ylim([0,100])
+        axes[i].bar(
+            x=[f"bottom {quantile*100}%", f"top {quantile*100}%"],
+            height=heights,
+            color=[palette[f"bottom {quantile*100}%"], palette[f"top {quantile*100}%"]],
+        )
+        axes[i].set_ylim([0, 100])
         axes[i].set_xlabel("")
         axes[i].set_ylabel("%")
         axes[i].set_title(f)
@@ -353,7 +523,12 @@ def plot_quantile_distributions_binary(input_df: pd.DataFrame,
             continue
 
     if target_time is not None:
-        plt.savefig(f"{save_path}/distributions_binary_features_{target_time}.svg", bbox_inches='tight')
+        plt.savefig(
+            f"{save_path}/distributions_binary_features_{target_time}.svg",
+            bbox_inches="tight",
+        )
     else:
-        plt.savefig(f"{save_path}/distributions_binary_features.svg", bbox_inches='tight')
+        plt.savefig(
+            f"{save_path}/distributions_binary_features.svg", bbox_inches="tight"
+        )
     plt.close()

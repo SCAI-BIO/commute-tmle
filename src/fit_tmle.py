@@ -75,16 +75,23 @@ def main(cfg: RunConfig):
         logger.info(
             f"Using subset of {len(df)} patients after propensity score matching"
         )
-    df_full = df.copy() # for later use
-    df = df.drop(columns=cfg.fit.exclude_columns)
+    df_full = df.copy()  # for later use
+    df = df.drop(columns=cfg.fit.exclude_columns, errors="ignore")
+
+    target_times = [t for t in cfg.fit.target_times if t <= df["event_time"].max()]
 
     # plot Aalen-Johansen curves
-    plot_aalen_johansen(
+    est_aj_dict = plot_aalen_johansen(
         save_path=cfg.general.output_path,
         T=df["event_time"],
         E=df["event_indicator"],
         exposed=df["exposed"],
+        target_times=target_times,
     )
+    for pred_type in ["risks", "rr", "rd"]:
+        est_aj_dict[pred_type].to_csv(
+            f"{cfg.general.output_path}/{pred_type}_estimates_aj.csv", index=False
+        )
 
     if not cfg.fit.run_evalues_benchmark:
         # cross fitting of SurvivalBoost model with hyperparameter tuning
@@ -187,7 +194,6 @@ def main(cfg: RunConfig):
         models = [SurvivalBoost(**cfg.survivalboost_params, show_progressbar=False)]
 
     # initialize PyTMLE
-    target_times = [t for t in cfg.fit.target_times if t <= df["event_time"].max()]
     tmle = PyTMLE(
         df,
         col_event_times="event_time",
@@ -198,6 +204,7 @@ def main(cfg: RunConfig):
         verbose=3,
         initial_estimates=initial_estimates,  # pass initial estimates directly to the second TMLE stage
         evalues_benchmark=cfg.fit.run_evalues_benchmark,
+        # mlflow_logging=True,
     )
 
     # fit TMLE
@@ -257,10 +264,14 @@ def main(cfg: RunConfig):
     # explore effect heterogeneity if requested
     if cfg.fit.explore_effect_heterogeneity:
         logger.info("Exploring effect heterogeneity...")
-        explore_effect_heterogeneity(fitted_tmle=tmle,
-                                     input_df=df_full.drop(columns=["exposed", "event_time", "event_indicator", "patient_id"]),
-                                     save_dir_path=f"{cfg.general.output_path}/plots_hte_exploration",
-                                     quantile=cfg.fit.hte_quantile)
+        explore_effect_heterogeneity(
+            fitted_tmle=tmle,
+            input_df=df_full.drop(
+                columns=["exposed", "event_time", "event_indicator", "patient_id"]
+            ),
+            save_dir_path=f"{cfg.general.output_path}/plots_hte_exploration",
+            quantile=cfg.fit.hte_quantile,
+        )
 
 
 if __name__ == "__main__":
