@@ -11,7 +11,7 @@ from sklearn.utils.class_weight import compute_sample_weight
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -228,18 +228,22 @@ def perform_propensity_score_matching(
     grid_search: bool = False,
     calibrate_propensities: bool = False,
     save_plots_to: Optional[str] = None,
-) -> pd.Series:
+    psm: Optional[PsmPyMod] = None,
+) -> Tuple[pd.Series, PsmPyMod]:
     # initialize PsmPy with the DataFrame and treatment variable
-    exclude = [col for col in exclude if col in df.columns and col != indx]
-    psm = PsmPyMod(df, treatment=treatment, indx=indx, exclude=exclude)
+    if psm is None:
+        exclude = [col for col in exclude if col in df.columns and col != indx]
+        psm = PsmPyMod(df, treatment=treatment, indx=indx, exclude=exclude)
 
-    # compute propensity scores using logistic regression
-    logger.info("Computing propensity scores using HistGradientBoostingClassifier...")
-    psm.hist_gradient_boosting_ps(
-        balance=True,
-        grid_search=grid_search,
-        calibrate_propensities=calibrate_propensities,
-    )
+        # compute propensity scores using logistic regression
+        logger.info(
+            "Computing propensity scores using HistGradientBoostingClassifier..."
+        )
+        psm.hist_gradient_boosting_ps(
+            balance=True,
+            grid_search=grid_search,
+            calibrate_propensities=calibrate_propensities,
+        )
 
     # perform the matching
     logger.info(
@@ -270,4 +274,4 @@ def perform_propensity_score_matching(
         finally:
             os.chdir(original_cwd)
 
-    return psm.df_matched[indx]
+    return psm.df_matched[indx], psm
