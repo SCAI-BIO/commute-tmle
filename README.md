@@ -1,4 +1,4 @@
-# Is COVID-19 increasing the risk for neurodegeneration? A causal inference study on three real-world population cohorts
+# Documented SARS-CoV-2 infection and risk of neurodegenerative disease diagnosis: a target trial emulation across three real-world cohorts
 Code accompanying a research article by Jannis Guski, Sofie Theisen Honoré, Guillaume Azarias, Steven Sison, Søren Brunak, and Holger Fröhlich. If you have any questions regarding the code or paper, please feel free to get in touch (jannis.guski@scai.fraunhofer.de).
 
 ## Objective
